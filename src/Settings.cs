@@ -12,6 +12,7 @@ namespace Cccc
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
         public bool Paused, Sound, FailHint = true;
+        public string Lang = "auto";
 
         public static Settings Load()
         {
@@ -22,6 +23,7 @@ namespace Cccc
                 s.Paused = Flag(k, "Paused", s.Paused);
                 s.Sound = Flag(k, "Sound", s.Sound);
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
+                s.Lang = Choice(k, "Lang", s.Lang);
             }
             return s;
         }
@@ -33,6 +35,7 @@ namespace Cccc
                 k.SetValue("Paused", Paused ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
+                k.SetValue("Lang", Lang, RegistryValueKind.String);
             }
         }
 
@@ -40,6 +43,14 @@ namespace Cccc
         {
             object v = k.GetValue(name);
             return v is int ? (int)v != 0 : fallback;
+        }
+
+        static string Choice(RegistryKey k, string name, string fallback)
+        {
+            object v = k.GetValue(name);
+            if (!(v is string)) return fallback;
+            string s = ((string)v).ToLowerInvariant();
+            return s == "en" || s == "zh" ? s : fallback;
         }
 
         public static bool AutoStart

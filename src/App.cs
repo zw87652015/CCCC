@@ -16,7 +16,7 @@ namespace Cccc
         readonly NotifyIcon tray = new NotifyIcon();
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
-        readonly MenuItem miPause, miSound, miHint, miStartup;
+        readonly MenuItem miShow, miPause, miSound, miHint, miStartup, miLang, miLangEn, miLangZh, miQuit;
         Sounds sounds;
         IntPtr trayHandle;
 
@@ -27,6 +27,7 @@ namespace Cccc
 
         public App(bool silent)
         {
+            L.Apply(set.Lang);
             card.CreateWindow();
             hook = new KeyHook(hub.Handle);
 
@@ -36,15 +37,20 @@ namespace Cccc
             debounce.Tick += delegate { debounce.Stop(); OnClipboard(); };
             failCheck.Tick += delegate { failCheck.Stop(); OnFailCheck(); };
 
+            miShow = new MenuItem(L.MenuShow, delegate { ShowClipboard(); }) { DefaultItem = true };
             miPause = new MenuItem(L.MenuPause, delegate { set.Paused = !set.Paused; set.Save(); Sync(); });
             miSound = new MenuItem(L.MenuSound, delegate { set.Sound = !set.Sound; set.Save(); Sync(); if (set.Sound) sounds.Ok(); });
             miHint = new MenuItem(L.MenuHint, delegate { set.FailHint = !set.FailHint; set.Save(); Sync(); });
             miStartup = new MenuItem(L.MenuStartup, delegate { Settings.AutoStart = !Settings.AutoStart; Sync(); });
+            miLangEn = new MenuItem("English", delegate { SetLang("en"); }) { RadioCheck = true };
+            miLangZh = new MenuItem("中文", delegate { SetLang("zh"); }) { RadioCheck = true };
+            miLang = new MenuItem(L.MenuLanguage, new[] { miLangEn, miLangZh });
+            miQuit = new MenuItem(L.MenuQuit, delegate { Quit(); });
             tray.ContextMenu = new ContextMenu(new[]
             {
-                new MenuItem(L.MenuShow, delegate { ShowClipboard(); }) { DefaultItem = true },
-                new MenuItem("-"), miPause, miSound, miHint, miStartup,
-                new MenuItem("-"), new MenuItem(L.MenuQuit, delegate { Quit(); }),
+                miShow,
+                new MenuItem("-"), miPause, miSound, miHint, miStartup, miLang,
+                new MenuItem("-"), miQuit,
             });
             tray.MouseClick += (o, e) => { if (e.Button == MouseButtons.Left) ShowClipboard(); };
             SystemEvents.UserPreferenceChanged += (o, e) => { if (e.Category == UserPreferenceCategory.General) Sync(); };
@@ -65,12 +71,30 @@ namespace Cccc
             if (!silent) Notice(L.ReadyTitle, L.ReadySub);
         }
 
+        void SetLang(string lang)
+        {
+            if (set.Lang == lang) return;
+            set.Lang = lang;
+            set.Save();
+            Sync();
+        }
+
         void Sync()
         {
+            L.Apply(set.Lang);
+            miShow.Text = L.MenuShow;
+            miPause.Text = L.MenuPause;
+            miSound.Text = L.MenuSound;
+            miHint.Text = L.MenuHint;
+            miStartup.Text = L.MenuStartup;
+            miLang.Text = L.MenuLanguage;
+            miQuit.Text = L.MenuQuit;
             miPause.Checked = set.Paused;
             miSound.Checked = set.Sound;
             miHint.Checked = set.FailHint;
             miStartup.Checked = Settings.AutoStart;
+            miLangEn.Checked = !L.Zh;
+            miLangZh.Checked = L.Zh;
             if (set.Sound && sounds == null) sounds = new Sounds();
 
             Native.ThemeMenus(Theme.Current().Dark);
