@@ -39,6 +39,18 @@ namespace Cccc
         double vis, visTarget, last, deadline, duration = 2;
         double tEvent = -9, tPop = -9, tBump = -9, tShake = -9, tText = -9, tTitle = -9;
         int baseX, baseY;
+        string position = "left";
+
+        public string Position
+        {
+            get { return position; }
+            set
+            {
+                if (position == value) return;
+                position = value;
+                if (shown) { Prepare(); hoverArmed = !CursorInCard(); }
+            }
+        }
 
         public Card()
         {
@@ -120,6 +132,10 @@ namespace Cccc
 
             Layout(dpi / 96f, Theme.Current());
             baseX = mi.rcWork.Left + Px(Edge) - Px(CX);
+            if (position == "center")
+                baseX = mi.rcWork.Left + (mi.rcWork.Right - mi.rcWork.Left - Px(W)) / 2 - Px(CX);
+            else if (position == "right")
+                baseX = mi.rcWork.Right - Px(Edge) - Px(W) - Px(CX);
             baseY = mi.rcWork.Bottom - Px(Edge) - Px(CY + H);
         }
 

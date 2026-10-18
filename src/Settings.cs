@@ -13,6 +13,7 @@ namespace Cccc
 
         public bool Paused, Sound, FailHint = true, AutoUpdate = true;
         public string Lang = "auto";
+        public string Position = "left";
 
         public static Settings Load()
         {
@@ -25,6 +26,8 @@ namespace Cccc
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
                 s.AutoUpdate = Flag(k, "AutoUpdate", s.AutoUpdate);
                 s.Lang = Choice(k, "Lang", s.Lang);
+                string position = (k.GetValue("Position") as string ?? "").ToLowerInvariant();
+                if (position == "left" || position == "center" || position == "right") s.Position = position;
             }
             return s;
         }
@@ -38,6 +41,7 @@ namespace Cccc
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("AutoUpdate", AutoUpdate ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Lang", Lang, RegistryValueKind.String);
+                k.SetValue("Position", Position, RegistryValueKind.String);
             }
         }
 

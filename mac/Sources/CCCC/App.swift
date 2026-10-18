@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var miInput: NSMenuItem!, miStartup: NSMenuItem!, miAutoUpdate: NSMenuItem!
     private var miLang: NSMenuItem!, miLangEn: NSMenuItem!, miLangZh: NSMenuItem!
     private var miUpdate: NSMenuItem!, miQuit: NSMenuItem!
+    private var miPosition: NSMenuItem!, miPositionLeft: NSMenuItem!, miPositionCenter: NSMenuItem!, miPositionRight: NSMenuItem!
 
     private var sounds: Sounds?
     private(set) var tap: CFMachPort?
@@ -155,10 +156,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         langMenu.addItem(miLangZh)
         miLang = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         miLang.submenu = langMenu
+        let positionMenu = NSMenu()
+        miPositionLeft = item(#selector(setPositionLeft))
+        miPositionCenter = item(#selector(setPositionCenter))
+        miPositionRight = item(#selector(setPositionRight))
+        positionMenu.addItem(miPositionLeft)
+        positionMenu.addItem(miPositionCenter)
+        positionMenu.addItem(miPositionRight)
+        miPosition = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        miPosition.submenu = positionMenu
         miUpdate = item(#selector(checkUpdateAction))
         miQuit = item(#selector(quitAction))
 
-        for entry in [miShow, nil, miPause, miSound, miHint, miInput, miStartup, miAutoUpdate, miLang, nil, miUpdate, nil, miQuit] {
+        for entry in [miShow, nil, miPause, miSound, miHint, miPosition, miInput, miStartup, miAutoUpdate, miLang, nil, miUpdate, nil, miQuit] {
             menu.addItem(entry ?? .separator())
         }
     }
@@ -179,6 +189,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         miStartup.title = L.menuStartup
         miAutoUpdate.title = L.menuAutoUpdate
         miLang.title = L.menuLanguage
+        miPosition.title = L.menuPosition
+        miPositionLeft.title = L.positionLeft
+        miPositionCenter.title = L.positionCenter
+        miPositionRight.title = L.positionRight
+        miPositionLeft.state = Prefs.position == .left ? .on : .off
+        miPositionCenter.state = Prefs.position == .center ? .on : .off
+        miPositionRight.state = Prefs.position == .right ? .on : .off
+        card.position = Prefs.position
         miUpdate.title = L.menuCheckUpdate
         miQuit.title = L.menuQuit
 
@@ -250,6 +268,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func setLangEn() { setLang("en") }
+    @objc private func setPositionLeft() { setPosition(.left) }
+    @objc private func setPositionCenter() { setPosition(.center) }
+    @objc private func setPositionRight() { setPosition(.right) }
+
+    private func setPosition(_ position: NotificationPosition) {
+        Prefs.position = position
+        sync()
+        showClipboard()
+    }
+
     @objc private func setLangZh() { setLang("zh") }
 
     private func setLang(_ lang: String) {

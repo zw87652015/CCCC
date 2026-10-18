@@ -46,6 +46,14 @@ final class Card {
     var th = Theme.darkTheme
     var visTarget = 0.0
     var renderNow = 0.0
+    var position: NotificationPosition = .left {
+        didSet {
+            if position != oldValue && shown {
+                prepare()
+                hoverArmed = !cursorInCard()
+            }
+        }
+    }
 
     private var timer: Timer?
     private var cur: Content?
@@ -123,6 +131,11 @@ final class Card {
         let vf = screen.visibleFrame
         th = Theme.current
         baseX = vf.minX + Card.edge - Card.CX
+        switch position {
+        case .left: break
+        case .center: baseX = vf.midX - Card.W / 2 - Card.CX
+        case .right: baseX = vf.maxX - Card.edge - Card.W - Card.CX
+        }
         baseY = vf.minY + Card.edge - (Card.canvasH - Card.CY - Card.H)
     }
 

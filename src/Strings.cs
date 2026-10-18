@@ -63,6 +63,10 @@ namespace Cccc
         public static string MenuHint { get { return T("Warn when nothing was copied", "没复制上时提醒我"); } }
         public static string MenuStartup { get { return T("Start with Windows", "开机启动"); } }
         public static string MenuLanguage { get { return T("Language", "语言"); } }
+        public static string MenuPosition { get { return T("Notification position", "提醒位置"); } }
+        public static string PositionLeft { get { return T("Left", "左"); } }
+        public static string PositionCenter { get { return T("Center", "居中"); } }
+        public static string PositionRight { get { return T("Right", "右"); } }
         public static string MenuQuit { get { return T("Quit", "退出"); } }
         public static string MenuCheckUpdate { get { return T("Check for updates…", "检查更新…"); } }
         public static string MenuAutoUpdate { get { return T("Check for updates automatically", "自动检查更新"); } }

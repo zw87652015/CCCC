@@ -66,6 +66,10 @@ enum L {
     static var menuInput: String { t("Allow Input Monitoring…", "授予“输入监控”权限…") }
     static var menuStartup: String { t("Open at Login", "登录时打开") }
     static var menuLanguage: String { t("Language", "语言") }
+    static var menuPosition: String { t("Notification position", "提醒位置") }
+    static var positionLeft: String { t("Left", "左") }
+    static var positionCenter: String { t("Center", "居中") }
+    static var positionRight: String { t("Right", "右") }
     static var menuQuit: String { t("Quit", "退出") }
     static var menuCheckUpdate: String { t("Check for updates…", "检查更新…") }
     static var menuAutoUpdate: String { t("Check for updates automatically", "自动检查更新") }

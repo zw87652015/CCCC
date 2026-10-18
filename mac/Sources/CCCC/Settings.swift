@@ -1,6 +1,10 @@
 import AppKit
 import ServiceManagement
 
+enum NotificationPosition: String {
+    case left, center, right
+}
+
 enum Prefs {
     private static let d = UserDefaults.standard
 
@@ -26,6 +30,10 @@ enum Prefs {
             return s == "en" || s == "zh" ? s : "auto"
         }
         set { d.set(newValue, forKey: "Lang") }
+    }
+    static var position: NotificationPosition {
+        get { NotificationPosition(rawValue: (d.string(forKey: "Position") ?? "left").lowercased()) ?? .left }
+        set { d.set(newValue.rawValue, forKey: "Position") }
     }
     static var askedInputMonitoring: Bool {
         get { d.bool(forKey: "askedInputMonitoring") }

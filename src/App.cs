@@ -20,6 +20,7 @@ namespace Cccc
         readonly Timer updateTimer = new Timer { Interval = 10000 };
         readonly MenuItem miShow, miPause, miSound, miHint, miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miUpdate, miQuit;
         readonly SynchronizationContext ui;
+        readonly MenuItem miPosition, miPositionLeft, miPositionCenter, miPositionRight;
         Sounds sounds;
         IntPtr trayHandle;
 
@@ -57,12 +58,16 @@ namespace Cccc
             miLangEn = new MenuItem("English", delegate { SetLang("en"); }) { RadioCheck = true };
             miLangZh = new MenuItem("中文", delegate { SetLang("zh"); }) { RadioCheck = true };
             miLang = new MenuItem(L.MenuLanguage, new[] { miLangEn, miLangZh });
+            miPositionLeft = new MenuItem(L.PositionLeft, delegate { SetPosition("left"); }) { RadioCheck = true };
+            miPositionCenter = new MenuItem(L.PositionCenter, delegate { SetPosition("center"); }) { RadioCheck = true };
+            miPositionRight = new MenuItem(L.PositionRight, delegate { SetPosition("right"); }) { RadioCheck = true };
+            miPosition = new MenuItem(L.MenuPosition, new[] { miPositionLeft, miPositionCenter, miPositionRight });
             miUpdate = new MenuItem(L.MenuCheckUpdate, delegate { CheckUpdate(true); });
             miQuit = new MenuItem(L.MenuQuit, delegate { Quit(); });
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miHint, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miPause, miSound, miHint, miPosition, miStartup, miAutoUpdate, miLang,
                 new MenuItem("-"), miUpdate,
                 new MenuItem("-"), miQuit,
             });
@@ -87,6 +92,14 @@ namespace Cccc
             else if (!silent) Notice(L.ReadyTitle, L.ReadySub);
         }
 
+        void SetPosition(string position)
+        {
+            set.Position = position;
+            set.Save();
+            Sync();
+            ShowClipboard();
+        }
+
         void SetLang(string lang)
         {
             if (set.Lang == lang) return;
@@ -105,6 +118,14 @@ namespace Cccc
             miStartup.Text = L.MenuStartup;
             miAutoUpdate.Text = L.MenuAutoUpdate;
             miLang.Text = L.MenuLanguage;
+            miPosition.Text = L.MenuPosition;
+            miPositionLeft.Text = L.PositionLeft;
+            miPositionCenter.Text = L.PositionCenter;
+            miPositionRight.Text = L.PositionRight;
+            miPositionLeft.Checked = set.Position == "left";
+            miPositionCenter.Checked = set.Position == "center";
+            miPositionRight.Checked = set.Position == "right";
+            card.Position = set.Position;
             miUpdate.Text = L.MenuCheckUpdate;
             miQuit.Text = L.MenuQuit;
             miPause.Checked = set.Paused;
