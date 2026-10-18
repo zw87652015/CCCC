@@ -11,7 +11,7 @@ namespace Cccc
         const string Key = @"Software\CCCC";
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-        public bool Paused, Sound, FailHint = true;
+        public bool Paused, Sound, FailHint = true, AutoUpdate = true;
         public string Lang = "auto";
 
         public static Settings Load()
@@ -23,6 +23,7 @@ namespace Cccc
                 s.Paused = Flag(k, "Paused", s.Paused);
                 s.Sound = Flag(k, "Sound", s.Sound);
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
+                s.AutoUpdate = Flag(k, "AutoUpdate", s.AutoUpdate);
                 s.Lang = Choice(k, "Lang", s.Lang);
             }
             return s;
@@ -35,6 +36,7 @@ namespace Cccc
                 k.SetValue("Paused", Paused ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
+                k.SetValue("AutoUpdate", AutoUpdate ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Lang", Lang, RegistryValueKind.String);
             }
         }

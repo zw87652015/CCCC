@@ -39,6 +39,9 @@ namespace Cccc
         public static string Private { get { return T("Private", "已隐藏"); } }
         public static string PrivateSub { get { return T("•••••••• hidden for privacy", "•••••••• 敏感内容不显示"); } }
         public static string Rich { get { return T("Rich content", "其他格式内容"); } }
+        public static string AppData { get { return T("App data", "程序专用"); } }
+        public static string KeptIn(string app) { return T("Kept inside " + app, "保存在 " + app + " 里"); }
+        public static string AppContent(string app) { return T(app + " content", app + " 的内容"); }
         public static string Blank { get { return T("(whitespace)", "（空白字符）"); } }
 
         public static string Chars(int n) { return Zh ? N(n) + " 字" : N(n) + (n == 1 ? " char" : " chars"); }
@@ -61,6 +64,29 @@ namespace Cccc
         public static string MenuStartup { get { return T("Start with Windows", "开机启动"); } }
         public static string MenuLanguage { get { return T("Language", "语言"); } }
         public static string MenuQuit { get { return T("Quit", "退出"); } }
+        public static string MenuCheckUpdate { get { return T("Check for updates…", "检查更新…"); } }
+        public static string MenuAutoUpdate { get { return T("Check for updates automatically", "自动检查更新"); } }
+        public static string UpdateChecking { get { return T("Checking for updates", "正在检查更新"); } }
+        public static string UpdateCheckingSub { get { return T("Asking GitHub…", "正在询问 GitHub…"); } }
+        public static string UpToDate { get { return T("You're up to date", "已是最新版本"); } }
+        public static string UpToDateSub(string ver) { return "CCCC " + ver; }
+        public static string CheckFailed { get { return T("Couldn't check for updates", "检查更新失败"); } }
+        public static string UpdatePrompt(string newVer, string curVer, string name)
+        {
+            string body = string.IsNullOrEmpty(name) ? "" : name + "\n\n";
+            return T("CCCC " + newVer + " is available (you have " + curVer + ").\n\n" + body + "Update now? CCCC will restart.",
+                     "CCCC " + newVer + " 已发布（当前 " + curVer + "）。\n\n" + body + "现在更新吗？CCCC 将自动重启。");
+        }
+        public static string Downloading(string ver) { return T("Updating to " + ver, "正在更新到 " + ver); }
+        public static string DownloadingSub { get { return T("Downloading from GitHub…", "正在从 GitHub 下载…"); } }
+        public static string UpdateFailed(string msg)
+        {
+            return T("Couldn't update automatically:\n" + msg + "\n\nOpen the download page instead?",
+                     "无法自动更新：\n" + msg + "\n\n要打开下载页面吗？");
+        }
+        public static string UpdatedTitle(string ver) { return T("Updated to " + ver, "已更新到 " + ver); }
+        public static string UpdatedSub { get { return T("Thanks for keeping CCCC fresh.", "CCCC 已是最新。"); } }
+
         public static string Tip { get { return T("CCCC · copy with confidence", "CCCC · 放心复制"); } }
         public static string TipPaused { get { return T("CCCC · paused", "CCCC · 已暂停"); } }
     }

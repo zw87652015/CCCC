@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
@@ -16,7 +17,9 @@ namespace Cccc
         readonly NotifyIcon tray = new NotifyIcon();
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
-        readonly MenuItem miShow, miPause, miSound, miHint, miStartup, miLang, miLangEn, miLangZh, miQuit;
+        readonly Timer updateTimer = new Timer { Interval = 10000 };
+        readonly MenuItem miShow, miPause, miSound, miHint, miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miUpdate, miQuit;
+        readonly SynchronizationContext ui;
         Sounds sounds;
         IntPtr trayHandle;
 
@@ -24,9 +27,12 @@ namespace Cccc
         double lastTime = -99, lastFail = -99;
         int count, failCount, keyKind, keyTick;
         uint keySeq, lastSeq;
+        bool checking;
+        string declinedTag;
 
-        public App(bool silent)
+        public App(bool silent, bool updated)
         {
+            ui = new WindowsFormsSynchronizationContext();
             L.Apply(set.Lang);
             card.CreateWindow();
             hook = new KeyHook(hub.Handle);
@@ -36,20 +42,28 @@ namespace Cccc
             hub.Hello += delegate { Notice(L.RunningTitle, L.RunningSub); };
             debounce.Tick += delegate { debounce.Stop(); OnClipboard(); };
             failCheck.Tick += delegate { failCheck.Stop(); OnFailCheck(); };
+            updateTimer.Tick += delegate { updateTimer.Interval = 24 * 60 * 60 * 1000; if (set.AutoUpdate) CheckUpdate(false); };
 
             miShow = new MenuItem(L.MenuShow, delegate { ShowClipboard(); }) { DefaultItem = true };
             miPause = new MenuItem(L.MenuPause, delegate { set.Paused = !set.Paused; set.Save(); Sync(); });
             miSound = new MenuItem(L.MenuSound, delegate { set.Sound = !set.Sound; set.Save(); Sync(); if (set.Sound) sounds.Ok(); });
             miHint = new MenuItem(L.MenuHint, delegate { set.FailHint = !set.FailHint; set.Save(); Sync(); });
             miStartup = new MenuItem(L.MenuStartup, delegate { Settings.AutoStart = !Settings.AutoStart; Sync(); });
+            miAutoUpdate = new MenuItem(L.MenuAutoUpdate, delegate
+            {
+                set.AutoUpdate = !set.AutoUpdate; set.Save(); Sync();
+                if (set.AutoUpdate) CheckUpdate(false);
+            });
             miLangEn = new MenuItem("English", delegate { SetLang("en"); }) { RadioCheck = true };
             miLangZh = new MenuItem("中文", delegate { SetLang("zh"); }) { RadioCheck = true };
             miLang = new MenuItem(L.MenuLanguage, new[] { miLangEn, miLangZh });
+            miUpdate = new MenuItem(L.MenuCheckUpdate, delegate { CheckUpdate(true); });
             miQuit = new MenuItem(L.MenuQuit, delegate { Quit(); });
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miHint, miStartup, miLang,
+                new MenuItem("-"), miPause, miSound, miHint, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miUpdate,
                 new MenuItem("-"), miQuit,
             });
             tray.MouseClick += (o, e) => { if (e.Button == MouseButtons.Left) ShowClipboard(); };
@@ -59,6 +73,7 @@ namespace Cccc
             Sync();
             tray.Visible = true;
             hook.Start();
+            updateTimer.Start();
 
             lastSeq = Native.GetClipboardSequenceNumber();
             var now = ClipReader.Read();
@@ -68,7 +83,8 @@ namespace Cccc
                 lastHold = now.Hold;
                 if (now.Thumb != null) now.Thumb.Dispose();
             }
-            if (!silent) Notice(L.ReadyTitle, L.ReadySub);
+            if (updated) Notice(L.UpdatedTitle(Updater.Show(Updater.Current)), L.UpdatedSub);
+            else if (!silent) Notice(L.ReadyTitle, L.ReadySub);
         }
 
         void SetLang(string lang)
@@ -87,12 +103,15 @@ namespace Cccc
             miSound.Text = L.MenuSound;
             miHint.Text = L.MenuHint;
             miStartup.Text = L.MenuStartup;
+            miAutoUpdate.Text = L.MenuAutoUpdate;
             miLang.Text = L.MenuLanguage;
+            miUpdate.Text = L.MenuCheckUpdate;
             miQuit.Text = L.MenuQuit;
             miPause.Checked = set.Paused;
             miSound.Checked = set.Sound;
             miHint.Checked = set.FailHint;
             miStartup.Checked = Settings.AutoStart;
+            miAutoUpdate.Checked = set.AutoUpdate;
             miLangEn.Checked = !L.Zh;
             miLangZh.Checked = L.Zh;
             if (set.Sound && sounds == null) sounds = new Sounds();
@@ -181,6 +200,76 @@ namespace Cccc
             card.Show(new Content { Kind = Kind.Info, Title = title, Sub = sub }, false);
         }
 
+        void CheckUpdate(bool manual)
+        {
+            if (checking) return;
+            checking = true;
+            if (manual) Notice(L.UpdateChecking, L.UpdateCheckingSub);
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                Release r = null;
+                Exception err = null;
+                try { r = Updater.Fetch(); }
+                catch (Exception ex) { err = ex; }
+                ui.Post(delegate { OnChecked(manual, r, err); }, null);
+            });
+        }
+
+        void OnChecked(bool manual, Release r, Exception err)
+        {
+            if (err != null)
+            {
+                checking = false;
+                if (manual) Notice(L.CheckFailed, err.Message);
+                return;
+            }
+            if (!Updater.Newer(r.Version, Updater.Current))
+            {
+                checking = false;
+                if (manual) Notice(L.UpToDate, L.UpToDateSub(Updater.Show(Updater.Current)));
+                return;
+            }
+            if (!manual && r.Tag == declinedTag) { checking = false; return; }
+
+            string ver = Updater.Show(r.Version);
+            bool yes = MessageBox.Show(L.UpdatePrompt(ver, Updater.Show(Updater.Current), r.Name == r.Tag ? null : r.Name),
+                "CCCC", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes;
+            if (!yes)
+            {
+                declinedTag = r.Tag;
+                checking = false;
+                return;
+            }
+            if (r.AssetUrl == null)
+            {
+                checking = false;
+                Process.Start(r.HtmlUrl);
+                return;
+            }
+
+            Notice(L.Downloading(ver), L.DownloadingSub);
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                Exception install = null;
+                try { Updater.Install(r, Application.ExecutablePath); }
+                catch (Exception ex) { install = ex; }
+                ui.Post(delegate { OnInstalled(r, install); }, null);
+            });
+        }
+
+        void OnInstalled(Release r, Exception err)
+        {
+            checking = false;
+            if (err == null)
+            {
+                Process.Start(Application.ExecutablePath, "--updated " + Process.GetCurrentProcess().Id);
+                Quit();
+                return;
+            }
+            if (MessageBox.Show(L.UpdateFailed(err.Message), "CCCC", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                Process.Start(r.HtmlUrl);
+        }
+
         void Quit()
         {
             hook.Stop();
@@ -203,6 +292,9 @@ namespace Cccc
             if (verb == "--export-icon" && args.Length > 1) { Icons.ExportIco(args[1]); return; }
             if (verb == "--sheet" && args.Length > 1) { Sheet.Render(args[1]); return; }
 
+            int oldPid;
+            if (verb == "--updated" && args.Length > 1 && int.TryParse(args[1], out oldPid)) Updater.WaitForExit(oldPid);
+
             bool created;
             using (var mutex = new Mutex(true, @"Local\CCCC.Singleton", out created))
             {
@@ -211,7 +303,8 @@ namespace Cccc
                     Native.PostMessage(Native.HWND_BROADCAST, Hub.HelloMsg, IntPtr.Zero, IntPtr.Zero);
                     return;
                 }
-                app = new App(Array.IndexOf(args, "--silent") >= 0);
+                Updater.Cleanup(Application.ExecutablePath);
+                app = new App(Array.IndexOf(args, "--silent") >= 0, verb == "--updated");
                 Application.Run();
                 GC.KeepAlive(mutex);
             }

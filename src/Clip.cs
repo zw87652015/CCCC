@@ -20,20 +20,18 @@ namespace Cccc
                 try { d = Clipboard.GetDataObject(); }
                 catch (ExternalException) { Thread.Sleep(30); }
             }
-            if (d == null) return null;
 
-            string[] f;
-            try { f = d.GetFormats(false); }
-            catch (Exception) { return null; }
-            if (f == null || f.Length == 0) return null;
+            string[] f = null;
+            if (d != null)
+            {
+                try { f = d.GetFormats(false); }
+                catch (Exception) { }
+            }
+            // Photoshop layers, and other app-private objects, hide every format from OLE enumeration.
+            if (f == null || f.Length == 0) return Opaque();
 
             var c = new Content();
-            if (Has(f, "ExcludeClipboardContentFromMonitorProcessing") || Has(f, "Clipboard Viewer Ignore") || Dword(d, f, "CanIncludeInClipboardHistory") == 0)
-            {
-                c.Meta = L.Private;
-                c.Sub = c.Hold = L.PrivateSub;
-                return c;
-            }
+            if (Secret(f) || Dword(d, f, "CanIncludeInClipboardHistory") == 0) return Private(c);
 
             try
             {
@@ -75,6 +73,74 @@ namespace Cccc
             c.Sub = c.Hold = L.Rich;
             c.Sig = "fmt:" + string.Join("|", f);
             return c;
+        }
+
+        static Content Opaque()
+        {
+            string[] raw = RawFormats();
+            if (raw == null || raw.Length == 0) return null;
+            var c = new Content();
+            if (Secret(raw)) return Private(c);
+            string app = OwnerName();
+            c.Meta = L.AppData;
+            c.Sub = app != null ? L.KeptIn(app) : L.Rich;
+            c.Hold = app != null ? L.AppContent(app) : L.Rich;
+            c.Sig = "app:" + app + ":" + string.Join("|", raw);
+            return c;
+        }
+
+        static Content Private(Content c)
+        {
+            c.Meta = L.Private;
+            c.Sub = c.Hold = L.PrivateSub;
+            return c;
+        }
+
+        static bool Secret(string[] f)
+        {
+            return Has(f, "ExcludeClipboardContentFromMonitorProcessing") || Has(f, "Clipboard Viewer Ignore");
+        }
+
+        static string[] RawFormats()
+        {
+            bool open = false;
+            for (int i = 0; i < 5 && !open; i++)
+            {
+                open = Native.OpenClipboard(IntPtr.Zero);
+                if (!open) Thread.Sleep(30);
+            }
+            if (!open) return null;
+            try
+            {
+                var names = new System.Collections.Generic.List<string>();
+                var sb = new StringBuilder(256);
+                for (uint fmt = Native.EnumClipboardFormats(0); fmt != 0; fmt = Native.EnumClipboardFormats(fmt))
+                    names.Add(Native.GetClipboardFormatName(fmt, sb, sb.Capacity) > 0 ? sb.ToString() : "#" + fmt);
+                return names.ToArray();
+            }
+            finally { Native.CloseClipboard(); }
+        }
+
+        static string OwnerName()
+        {
+            IntPtr owner = Native.GetClipboardOwner();
+            if (owner == IntPtr.Zero) return null;
+            uint pid;
+            Native.GetWindowThreadProcessId(owner, out pid);
+            try
+            {
+                using (var p = System.Diagnostics.Process.GetProcessById((int)pid))
+                {
+                    try
+                    {
+                        string desc = p.MainModule.FileVersionInfo.FileDescription;
+                        if (!string.IsNullOrEmpty(desc) && desc.Trim().Length > 0) return desc.Trim();
+                    }
+                    catch (Exception) { }
+                    return p.ProcessName;
+                }
+            }
+            catch (Exception) { return null; }
         }
 
         static bool Has(string[] f, string name) { return Array.IndexOf(f, name) >= 0; }

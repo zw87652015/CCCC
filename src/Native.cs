@@ -49,6 +49,11 @@ namespace Cccc
         [DllImport("user32.dll")] public static extern bool AddClipboardFormatListener(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+        [DllImport("user32.dll")] public static extern IntPtr GetClipboardOwner();
+        [DllImport("user32.dll")] public static extern bool OpenClipboard(IntPtr hwnd);
+        [DllImport("user32.dll")] public static extern bool CloseClipboard();
+        [DllImport("user32.dll")] public static extern uint EnumClipboardFormats(uint format);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClipboardFormatName(uint format, StringBuilder sb, int max);
         [DllImport("user32.dll")] public static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize, IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);
         [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int cmd);
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);

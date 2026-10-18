@@ -9,7 +9,7 @@ New-Item -ItemType Directory -Force $bin, $dist | Out-Null
 
 $src = Get-ChildItem (Join-Path $root 'src') -Filter *.cs | ForEach-Object { $_.FullName }
 $opts = @('/nologo', '/target:winexe', '/optimize+', '/debug-', "/win32manifest:$root\app.manifest",
-          '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', "/out:$exe")
+          '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Web.Extensions.dll', "/out:$exe")
 
 # Pass 1 builds the app, which then draws its own icon; pass 2 embeds it.
 & $csc @opts @src
