@@ -1,2 +1,5 @@
 mac/.build/
 mac/build/
+*.dmg
+*.zip
+.DS_Store
