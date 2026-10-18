@@ -39,7 +39,23 @@ namespace Cccc
         double vis, visTarget, last, deadline, duration = 2;
         double tEvent = -9, tPop = -9, tBump = -9, tShake = -9, tText = -9, tTitle = -9;
         int baseX, baseY;
-        string position = "left";
+        string position = "left", appearance = "auto";
+        int durationMs, opacity = 100;
+        bool simple;
+        float bodyWidth { get { return simple ? 220 : W; } }
+        float bodyHeight { get { return simple ? 48 : H; } }
+        float canvasWidth { get { return bodyWidth + 2 * CX; } }
+        float canvasHeight { get { return bodyHeight + CY + 32; } }
+
+        public void Configure(Settings settings)
+        {
+            bool changed = appearance != settings.Appearance || simple != settings.Simple;
+            appearance = settings.Appearance;
+            simple = settings.Simple;
+            durationMs = settings.DurationMs;
+            opacity = settings.Opacity;
+            if (shown && changed) { Prepare(); hoverArmed = !CursorInCard(); }
+        }
 
         public string Position
         {
@@ -104,7 +120,7 @@ namespace Cccc
             if (repeat) { tPop = now; tBump = now; if (!fresh && oldTitle != c.Title) tTitle = now; }
             else tText = now;
             if (c.Kind == Kind.Fail) tShake = now;
-            duration = c.Kind == Kind.Info || c.Kind == Kind.Empty ? 2.6 : 1.9;
+            duration = durationMs > 0 ? durationMs / 1000.0 : c.Kind == Kind.Info || c.Kind == Kind.Empty ? 2.6 : 1.9;
             deadline = now + duration;
             visTarget = 1;
 
@@ -130,29 +146,29 @@ namespace Cccc
             try { if (Native.GetDpiForMonitor(mon, 0, out dpi, out dpiY) != 0) dpi = 96; }
             catch (Exception) { dpi = 96; }
 
-            Layout(dpi / 96f, Theme.Current());
+            Layout(dpi / 96f, appearance == "light" ? Theme.LightTheme : appearance == "dark" ? Theme.DarkTheme : Theme.Current());
             baseX = mi.rcWork.Left + Px(Edge) - Px(CX);
             if (position == "center")
-                baseX = mi.rcWork.Left + (mi.rcWork.Right - mi.rcWork.Left - Px(W)) / 2 - Px(CX);
+                baseX = mi.rcWork.Left + (mi.rcWork.Right - mi.rcWork.Left - Px(bodyWidth)) / 2 - Px(CX);
             else if (position == "right")
-                baseX = mi.rcWork.Right - Px(Edge) - Px(W) - Px(CX);
-            baseY = mi.rcWork.Bottom - Px(Edge) - Px(CY + H);
+                baseX = mi.rcWork.Right - Px(Edge) - Px(bodyWidth) - Px(CX);
+            baseY = mi.rcWork.Bottom - Px(Edge) - Px(CY + bodyHeight);
         }
 
         public void Layout(float scale, Theme theme)
         {
-            if (surf == null || scale != s)
+            if (surf == null || scale != s || surf.W != (int)Math.Ceiling(canvasWidth * scale) || surf.H != (int)Math.Ceiling(canvasHeight * scale))
             {
                 if (surf != null) surf.Dispose();
                 s = scale;
-                surf = new Surface((int)Math.Ceiling(CanvasW * s), (int)Math.Ceiling(CanvasH * s));
+                surf = new Surface((int)Math.Ceiling(canvasWidth * s), (int)Math.Ceiling(canvasHeight * s));
                 shadowTheme = null;
             }
             th = theme;
             if (shadowTheme != theme)
             {
                 if (shadow != null) shadow.Dispose();
-                shadow = Alpha.Shadow(surf.W, surf.H, s, new RectangleF(CX, CY, W, H), R, theme);
+                shadow = Alpha.Shadow(surf.W, surf.H, s, new RectangleF(CX, CY, bodyWidth, bodyHeight), R, theme);
                 shadowTheme = theme;
             }
         }
@@ -164,7 +180,7 @@ namespace Cccc
             Native.POINT p;
             if (!Native.GetCursorPos(out p)) return false;
             int x0 = baseX + Px(CX), y0 = baseY + Px(CY);
-            return p.X >= x0 && p.X < x0 + Px(W) && p.Y >= y0 && p.Y < y0 + Px(H);
+            return p.X >= x0 && p.X < x0 + Px(bodyWidth) && p.Y >= y0 && p.Y < y0 + Px(bodyHeight);
         }
 
         void Frame()
@@ -188,7 +204,7 @@ namespace Cccc
                 double u = ts / 0.5;
                 dx = 7 * Math.Sin(u * Math.PI * 7) * (1 - u) * (1 - u);
             }
-            byte alpha = (byte)Math.Round(255 * Ease.OutCubic(Math.Min(1, vis * 1.5)));
+            byte alpha = (byte)Math.Round(255 * (opacity / 100.0) * Ease.OutCubic(Math.Min(1, vis * 1.5)));
             Push(baseX + (int)Math.Round(dx * s), baseY + (int)Math.Round(dy * s), alpha);
             Native.DwmFlush();
         }
@@ -238,7 +254,7 @@ namespace Cccc
             if (tp >= 0 && tp < 0.24)
             {
                 float k = 1 + 0.03f * (float)Math.Sin(Math.PI * tp / 0.24);
-                float cx = (CX + W / 2) * s, cy = (CY + H / 2) * s;
+                float cx = (CX + bodyWidth / 2) * s, cy = (CY + bodyHeight / 2) * s;
                 g.TranslateTransform(cx, cy);
                 g.ScaleTransform(k, k);
                 g.TranslateTransform(-cx, -cy);
@@ -246,7 +262,7 @@ namespace Cccc
             g.DrawImage(shadow, new Rectangle(0, 0, surf.W, surf.H));
             g.ScaleTransform(s, s);
 
-            var card = new RectangleF(CX, CY, W, H);
+            var card = new RectangleF(CX, CY, bodyWidth, bodyHeight);
             using (var path = Shapes.RoundRect(card, R))
             {
                 using (var b = new SolidBrush(th.Bg)) g.FillPath(b, path);
@@ -264,7 +280,7 @@ namespace Cccc
             double remain = Ease.Clamp01((deadline - now) / duration);
             if (visTarget > 0 && remain > 0)
             {
-                float x0 = CX + R, x1 = CX + W - R, y = CY + H - 3f;
+                float x0 = CX + R, x1 = CX + bodyWidth - R, y = CY + bodyHeight - 3f;
                 using (var pen = new Pen(Color.FromArgb(th.Dark ? 70 : 60, accent), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                     g.DrawLine(pen, x0, y, x0 + (float)((x1 - x0) * remain), y);
             }
@@ -275,7 +291,7 @@ namespace Cccc
 
         void DrawIcon(Graphics g, double te, Color accent, bool warn)
         {
-            float ix = CX + 32, iy = CY + H / 2;
+            float ix = CX + 32, iy = CY + bodyHeight / 2;
 
             double tr = te - 0.04;
             if (tr >= 0 && tr < 0.6)
@@ -316,11 +332,18 @@ namespace Cccc
 
         void DrawText(Graphics g, double now, Color accent)
         {
-            float right = CX + W - 14;
+            float right = CX + bodyWidth - 14;
+            if (simple)
+            {
+                float a = (float)Ease.OutCubic((now - tText) / 0.26);
+                using (var b = new SolidBrush(Color.FromArgb((int)(255 * a), th.Title)))
+                    g.DrawString(cur.Title, fTitle, b, new RectangleF(CX + 58, CY + (bodyHeight - 22) / 2, bodyWidth - 72, 22), fmt);
+                return;
+            }
 
             if (cur.Thumb != null)
             {
-                var tr = new RectangleF(CX + W - 12 - 40, CY + 12, 40, 40);
+                var tr = new RectangleF(CX + bodyWidth - 12 - 40, CY + 12, 40, 40);
                 using (var tb = new TextureBrush(cur.Thumb, WrapMode.Clamp))
                 using (var p = Shapes.RoundRect(tr, 8))
                 using (var pen = new Pen(th.Border, 1f / s))
@@ -337,7 +360,7 @@ namespace Cccc
             {
                 string bt = "×" + cur.Count;
                 float bw = Math.Max(28, g.MeasureString(bt, fBadge, PointF.Empty, fmt).Width + 16), bh = 22;
-                float bx = right - bw, by = CY + (H - bh) / 2;
+                float bx = right - bw, by = CY + (bodyHeight - bh) / 2;
                 double tb = now - tBump;
                 float bk = tb >= 0 && tb < 0.6 ? 1 + 0.3f * (float)(Math.Exp(-7 * tb) * Math.Cos(16 * tb)) : 1;
                 var state = g.Save();

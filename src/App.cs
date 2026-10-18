@@ -21,6 +21,10 @@ namespace Cccc
         readonly MenuItem miShow, miPause, miSound, miHint, miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miUpdate, miQuit;
         readonly SynchronizationContext ui;
         readonly MenuItem miPosition, miPositionLeft, miPositionCenter, miPositionRight;
+        readonly MenuItem miAppearance, miDuration, miTransparency, miSimple;
+        readonly string[] appearances = { "auto", "light", "dark" };
+        readonly int[] durations = { 0, 1000, 2000, 3000, 5000, 10000 };
+        readonly int[] opacities = { 100, 90, 75, 50, 25 };
         Sounds sounds;
         IntPtr trayHandle;
 
@@ -62,12 +66,33 @@ namespace Cccc
             miPositionCenter = new MenuItem(L.PositionCenter, delegate { SetPosition("center"); }) { RadioCheck = true };
             miPositionRight = new MenuItem(L.PositionRight, delegate { SetPosition("right"); }) { RadioCheck = true };
             miPosition = new MenuItem(L.MenuPosition, new[] { miPositionLeft, miPositionCenter, miPositionRight });
+            miAppearance = new MenuItem(L.MenuAppearance);
+            foreach (string value in appearances)
+            {
+                string choice = value;
+                miAppearance.MenuItems.Add(new MenuItem("", delegate { set.Appearance = choice; SavePreview(); }) { RadioCheck = true });
+            }
+            miDuration = new MenuItem(L.MenuDuration);
+            foreach (int value in durations)
+            {
+                int choice = value;
+                miDuration.MenuItems.Add(new MenuItem("", delegate { set.DurationMs = choice; SavePreview(); }) { RadioCheck = true });
+            }
+            miTransparency = new MenuItem(L.MenuTransparency);
+            foreach (int value in opacities)
+            {
+                int choice = value;
+                miTransparency.MenuItems.Add(new MenuItem("", delegate { set.Opacity = choice; SavePreview(); }) { RadioCheck = true });
+            }
+            miSimple = new MenuItem(L.MenuSimple, delegate { set.Simple = !set.Simple; SavePreview(); });
             miUpdate = new MenuItem(L.MenuCheckUpdate, delegate { CheckUpdate(true); });
             miQuit = new MenuItem(L.MenuQuit, delegate { Quit(); });
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miHint, miPosition, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miPause, miSound, miHint,
+                new MenuItem("-"), miPosition, miAppearance, miDuration, miTransparency, miSimple,
+                new MenuItem("-"), miStartup, miAutoUpdate, miLang,
                 new MenuItem("-"), miUpdate,
                 new MenuItem("-"), miQuit,
             });
@@ -95,6 +120,11 @@ namespace Cccc
         void SetPosition(string position)
         {
             set.Position = position;
+            SavePreview();
+        }
+
+        void SavePreview()
+        {
             set.Save();
             Sync();
             ShowClipboard();
@@ -125,6 +155,28 @@ namespace Cccc
             miPositionLeft.Checked = set.Position == "left";
             miPositionCenter.Checked = set.Position == "center";
             miPositionRight.Checked = set.Position == "right";
+            miAppearance.Text = L.MenuAppearance;
+            string[] appearanceLabels = { L.AppearanceAuto, L.AppearanceLight, L.AppearanceDark };
+            for (int i = 0; i < appearances.Length; i++)
+            {
+                miAppearance.MenuItems[i].Text = appearanceLabels[i];
+                miAppearance.MenuItems[i].Checked = set.Appearance == appearances[i];
+            }
+            miDuration.Text = L.MenuDuration;
+            for (int i = 0; i < durations.Length; i++)
+            {
+                miDuration.MenuItems[i].Text = durations[i] == 0 ? L.DurationDefault : L.Seconds(durations[i] / 1000);
+                miDuration.MenuItems[i].Checked = set.DurationMs == durations[i];
+            }
+            miTransparency.Text = L.MenuTransparency;
+            for (int i = 0; i < opacities.Length; i++)
+            {
+                miTransparency.MenuItems[i].Text = L.Transparency(100 - opacities[i]);
+                miTransparency.MenuItems[i].Checked = set.Opacity == opacities[i];
+            }
+            miSimple.Text = L.MenuSimple;
+            miSimple.Checked = set.Simple;
+            card.Configure(set);
             card.Position = set.Position;
             miUpdate.Text = L.MenuCheckUpdate;
             miQuit.Text = L.MenuQuit;
@@ -137,7 +189,7 @@ namespace Cccc
             miLangZh.Checked = L.Zh;
             if (set.Sound && sounds == null) sounds = new Sounds();
 
-            Native.ThemeMenus(Theme.Current().Dark);
+            Native.ThemeMenus((set.Appearance == "light" ? Theme.LightTheme : set.Appearance == "dark" ? Theme.DarkTheme : Theme.Current()).Dark);
             IntPtr old = trayHandle;
             int size = SystemInformation.SmallIconSize.Width;
             using (var bmp = Icons.Tray(size, Theme.TaskbarLight(), set.Paused)) trayHandle = bmp.GetHicon();

@@ -14,6 +14,9 @@ namespace Cccc
         public bool Paused, Sound, FailHint = true, AutoUpdate = true;
         public string Lang = "auto";
         public string Position = "left";
+        public string Appearance = "auto";
+        public int DurationMs, Opacity = 100;
+        public bool Simple;
 
         public static Settings Load()
         {
@@ -28,6 +31,11 @@ namespace Cccc
                 s.Lang = Choice(k, "Lang", s.Lang);
                 string position = (k.GetValue("Position") as string ?? "").ToLowerInvariant();
                 if (position == "left" || position == "center" || position == "right") s.Position = position;
+                string appearance = (k.GetValue("Appearance") as string ?? "").ToLowerInvariant();
+                if (appearance == "light" || appearance == "dark") s.Appearance = appearance;
+                s.DurationMs = Number(k, "DurationMs", 0, 500, 30000);
+                s.Opacity = Number(k, "Opacity", 100, 25, 100);
+                s.Simple = Flag(k, "Simple", false);
             }
             return s;
         }
@@ -42,7 +50,17 @@ namespace Cccc
                 k.SetValue("AutoUpdate", AutoUpdate ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Lang", Lang, RegistryValueKind.String);
                 k.SetValue("Position", Position, RegistryValueKind.String);
+                k.SetValue("Appearance", Appearance, RegistryValueKind.String);
+                k.SetValue("DurationMs", DurationMs, RegistryValueKind.DWord);
+                k.SetValue("Opacity", Opacity, RegistryValueKind.DWord);
+                k.SetValue("Simple", Simple ? 1 : 0, RegistryValueKind.DWord);
             }
+        }
+
+        static int Number(RegistryKey k, string name, int fallback, int min, int max)
+        {
+            object v = k.GetValue(name);
+            return v is int && (int)v >= min && (int)v <= max ? (int)v : fallback;
         }
 
         static bool Flag(RegistryKey k, string name, bool fallback)

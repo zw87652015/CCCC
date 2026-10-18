@@ -46,6 +46,25 @@ final class Card {
     var th = Theme.darkTheme
     var visTarget = 0.0
     var renderNow = 0.0
+    private var appearance: AppearanceMode = .auto
+    private var simple = false
+    private var durationMs = 0, opacity = 100
+    private var bodyWidth: CGFloat { simple ? 220 : Card.W }
+    private var bodyHeight: CGFloat { simple ? 48 : Card.H }
+    private var canvasWidth: CGFloat { bodyWidth + 2 * Card.CX }
+    private var canvasHeight: CGFloat { bodyHeight + Card.CY + 32 }
+
+    func configure() {
+        let changed = appearance != Prefs.appearance || simple != Prefs.simple
+        appearance = Prefs.appearance
+        simple = Prefs.simple
+        durationMs = Prefs.durationMs
+        opacity = Prefs.opacity
+        if shown && changed {
+            prepare()
+            hoverArmed = !cursorInCard()
+        }
+    }
     var position: NotificationPosition = .left {
         didSet {
             if position != oldValue && shown {
@@ -101,7 +120,7 @@ final class Card {
             tText = t
         }
         if c.kind == .fail { tShake = t }
-        duration = c.kind == .info || c.kind == .empty ? 2.6 : 1.9
+        duration = durationMs > 0 ? Double(durationMs) / 1000 : (c.kind == .info || c.kind == .empty ? 2.6 : 1.9)
         deadline = t + duration
         visTarget = 1
 
@@ -129,18 +148,20 @@ final class Card {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
         let vf = screen.visibleFrame
-        th = Theme.current
+        th = appearance == .light ? Theme.lightTheme : appearance == .dark ? Theme.darkTheme : Theme.current
+        panel.appearance = appearance == .auto ? nil : NSAppearance(named: appearance == .light ? .aqua : .darkAqua)
+        panel.setContentSize(NSSize(width: canvasWidth, height: canvasHeight))
         baseX = vf.minX + Card.edge - Card.CX
         switch position {
         case .left: break
-        case .center: baseX = vf.midX - Card.W / 2 - Card.CX
-        case .right: baseX = vf.maxX - Card.edge - Card.W - Card.CX
+        case .center: baseX = vf.midX - bodyWidth / 2 - Card.CX
+        case .right: baseX = vf.maxX - Card.edge - bodyWidth - Card.CX
         }
-        baseY = vf.minY + Card.edge - (Card.canvasH - Card.CY - Card.H)
+        baseY = vf.minY + Card.edge - (canvasHeight - Card.CY - bodyHeight)
     }
 
     private func cursorInCard() -> Bool {
-        let r = CGRect(x: baseX + Card.CX, y: baseY + (Card.canvasH - Card.CY - Card.H), width: Card.W, height: Card.H)
+        let r = CGRect(x: baseX + Card.CX, y: baseY + (canvasHeight - Card.CY - bodyHeight), width: bodyWidth, height: bodyHeight)
         return r.contains(NSEvent.mouseLocation)
     }
 
@@ -168,7 +189,7 @@ final class Card {
             dx = CGFloat(7 * sin(u * .pi * 7) * (1 - u) * (1 - u))
         }
         panel.setFrameOrigin(NSPoint(x: baseX + dx, y: baseY - dy))
-        panel.alphaValue = CGFloat(Ease.outCubic(min(1, vis * 1.5)))
+        panel.alphaValue = CGFloat(opacity) / 100 * CGFloat(Ease.outCubic(min(1, vis * 1.5)))
     }
 
     private func hideNow() {
@@ -193,13 +214,13 @@ final class Card {
         let tp = t - tPop
         if tp >= 0 && tp < 0.24 {
             let k = 1 + 0.03 * CGFloat(sin(.pi * tp / 0.24))
-            let cx = Card.CX + Card.W / 2, cy = Card.CY + Card.H / 2
+            let cx = Card.CX + bodyWidth / 2, cy = Card.CY + bodyHeight / 2
             ctx.translateBy(x: cx, y: cy)
             ctx.scaleBy(x: k, y: k)
             ctx.translateBy(x: -cx, y: -cy)
         }
 
-        let card = CGRect(x: Card.CX, y: Card.CY, width: Card.W, height: Card.H)
+        let card = CGRect(x: Card.CX, y: Card.CY, width: bodyWidth, height: bodyHeight)
         let path = Shapes.roundRect(card, Card.R)
         shadowPass(ctx, path, offset: 5, blur: 15, alpha: th.shadowFar, px: px)
         shadowPass(ctx, path, offset: 1, blur: 3, alpha: th.shadowNear, px: px)
@@ -221,7 +242,7 @@ final class Card {
 
         let remain = Ease.clamp01((deadline - t) / duration)
         if visTarget > 0 && remain > 0 {
-            let x0 = Card.CX + Card.R, x1 = Card.CX + Card.W - Card.R, y = Card.CY + Card.H - 3
+            let x0 = Card.CX + Card.R, x1 = Card.CX + bodyWidth - Card.R, y = Card.CY + bodyHeight - 3
             ctx.setStrokeColor(accent.withAlphaComponent(th.dark ? 70 / 255 : 60 / 255).cgColor)
             ctx.setLineWidth(2)
             ctx.setLineCap(.round)
@@ -245,7 +266,7 @@ final class Card {
     }
 
     private func drawIcon(_ ctx: CGContext, te: Double, accent: NSColor, warn: Bool) {
-        let ix = Card.CX + 32, iy = Card.CY + Card.H / 2
+        let ix = Card.CX + 32, iy = Card.CY + bodyHeight / 2
 
         let tr = te - 0.04
         if tr >= 0 && tr < 0.6 {
@@ -293,10 +314,16 @@ final class Card {
     }
 
     private func drawText(_ ctx: CGContext, _ c: Content, now t: Double, accent: NSColor) {
-        var right = Card.CX + Card.W - 14
+        var right = Card.CX + bodyWidth - 14
+        if simple {
+            let a = CGFloat(Ease.outCubic((t - tText) / 0.26))
+            drawLine(c.title, fTitle, th.title.withAlphaComponent(a), x: Card.CX + 58,
+                     y: Card.CY + (bodyHeight - 22) / 2, w: bodyWidth - 72, h: 22)
+            return
+        }
 
         if let thumb = c.thumb {
-            let tr = CGRect(x: Card.CX + Card.W - 12 - 40, y: Card.CY + 12, width: 40, height: 40)
+            let tr = CGRect(x: Card.CX + bodyWidth - 12 - 40, y: Card.CY + 12, width: 40, height: 40)
             ctx.saveGState()
             ctx.addPath(Shapes.roundRect(tr, 8))
             ctx.clip()
@@ -313,7 +340,7 @@ final class Card {
             let bt = "×\(c.count)"
             let bh: CGFloat = 22
             let bw = max(28, measure(bt, fBadge) + 16)
-            let bx = right - bw, by = Card.CY + (Card.H - bh) / 2
+            let bx = right - bw, by = Card.CY + (bodyHeight - bh) / 2
             let tb = t - tBump
             let bk = tb >= 0 && tb < 0.6 ? 1 + 0.3 * CGFloat(exp(-7 * tb) * cos(16 * tb)) : 1
             let cx = bx + bw / 2, cy = by + bh / 2

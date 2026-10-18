@@ -64,6 +64,16 @@ namespace Cccc
         public static string MenuStartup { get { return T("Start with Windows", "开机启动"); } }
         public static string MenuLanguage { get { return T("Language", "语言"); } }
         public static string MenuPosition { get { return T("Notification position", "提醒位置"); } }
+        public static string MenuAppearance { get { return T("Appearance", "外观模式"); } }
+        public static string AppearanceAuto { get { return T("Follow system", "跟随系统"); } }
+        public static string AppearanceLight { get { return T("Light", "浅色"); } }
+        public static string AppearanceDark { get { return T("Dark", "深色"); } }
+        public static string MenuDuration { get { return T("Display duration", "显示时长"); } }
+        public static string DurationDefault { get { return T("Default (1.9–2.6 seconds)", "默认（1.9～2.6 秒）"); } }
+        public static string Seconds(int n) { return T(n + " seconds", n + " 秒"); }
+        public static string MenuTransparency { get { return T("Transparency", "透明度"); } }
+        public static string Transparency(int n) { return n == 0 ? T("0% (opaque)", "0%（不透明）") : n + "%"; }
+        public static string MenuSimple { get { return T("Simple mode", "简易模式"); } }
         public static string PositionLeft { get { return T("Left", "左"); } }
         public static string PositionCenter { get { return T("Center", "居中"); } }
         public static string PositionRight { get { return T("Right", "右"); } }

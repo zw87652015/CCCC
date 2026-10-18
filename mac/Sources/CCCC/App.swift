@@ -57,6 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var miLang: NSMenuItem!, miLangEn: NSMenuItem!, miLangZh: NSMenuItem!
     private var miUpdate: NSMenuItem!, miQuit: NSMenuItem!
     private var miPosition: NSMenuItem!, miPositionLeft: NSMenuItem!, miPositionCenter: NSMenuItem!, miPositionRight: NSMenuItem!
+    private var miAppearance: NSMenuItem!, miDuration: NSMenuItem!, miTransparency: NSMenuItem!, miSimple: NSMenuItem!
+    private let appearances: [AppearanceMode] = [.auto, .light, .dark]
+    private let durations = [0, 1000, 2000, 3000, 5000, 10000]
+    private let opacities = [100, 90, 75, 50, 25]
 
     private var sounds: Sounds?
     private(set) var tap: CFMachPort?
@@ -165,12 +169,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         positionMenu.addItem(miPositionRight)
         miPosition = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         miPosition.submenu = positionMenu
+        miAppearance = choices(appearances.indices.map { $0 }, action: #selector(setAppearance(_:)))
+        miDuration = choices(durations, action: #selector(setDuration(_:)))
+        miTransparency = choices(opacities, action: #selector(setOpacity(_:)))
+        miSimple = item(#selector(toggleSimple))
         miUpdate = item(#selector(checkUpdateAction))
         miQuit = item(#selector(quitAction))
 
-        for entry in [miShow, nil, miPause, miSound, miHint, miPosition, miInput, miStartup, miAutoUpdate, miLang, nil, miUpdate, nil, miQuit] {
+        for entry in [miShow, nil, miPause, miSound, miHint, miInput, nil, miPosition, miAppearance, miDuration, miTransparency, miSimple, nil, miStartup, miAutoUpdate, miLang, nil, miUpdate, nil, miQuit] {
             menu.addItem(entry ?? .separator())
         }
+    }
+
+    private func choices(_ values: [Int], action: Selector) -> NSMenuItem {
+        let parent = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for value in values {
+            let child = item(action)
+            child.tag = value
+            submenu.addItem(child)
+        }
+        parent.submenu = submenu
+        return parent
     }
 
     private func item(_ action: Selector) -> NSMenuItem {
@@ -196,6 +216,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         miPositionLeft.state = Prefs.position == .left ? .on : .off
         miPositionCenter.state = Prefs.position == .center ? .on : .off
         miPositionRight.state = Prefs.position == .right ? .on : .off
+        miAppearance.title = L.menuAppearance
+        let appearanceLabels = [L.appearanceAuto, L.appearanceLight, L.appearanceDark]
+        for (i, child) in miAppearance.submenu!.items.enumerated() {
+            child.title = appearanceLabels[i]
+            child.state = Prefs.appearance == appearances[i] ? .on : .off
+        }
+        miDuration.title = L.menuDuration
+        for child in miDuration.submenu!.items {
+            child.title = child.tag == 0 ? L.durationDefault : L.seconds(child.tag / 1000)
+            child.state = Prefs.durationMs == child.tag ? .on : .off
+        }
+        miTransparency.title = L.menuTransparency
+        for child in miTransparency.submenu!.items {
+            child.title = L.transparency(100 - child.tag)
+            child.state = Prefs.opacity == child.tag ? .on : .off
+        }
+        miSimple.title = L.menuSimple
+        miSimple.state = Prefs.simple ? .on : .off
+        card.configure()
         card.position = Prefs.position
         miUpdate.title = L.menuCheckUpdate
         miQuit.title = L.menuQuit
@@ -271,6 +310,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func setPositionLeft() { setPosition(.left) }
     @objc private func setPositionCenter() { setPosition(.center) }
     @objc private func setPositionRight() { setPosition(.right) }
+
+    @objc private func setAppearance(_ sender: NSMenuItem) {
+        Prefs.appearance = appearances[sender.tag]
+        sync()
+        showClipboard()
+    }
+
+    @objc private func setDuration(_ sender: NSMenuItem) {
+        Prefs.durationMs = sender.tag
+        sync()
+        showClipboard()
+    }
+
+    @objc private func setOpacity(_ sender: NSMenuItem) {
+        Prefs.opacity = sender.tag
+        sync()
+        showClipboard()
+    }
+
+    @objc private func toggleSimple() {
+        Prefs.simple.toggle()
+        sync()
+        showClipboard()
+    }
 
     private func setPosition(_ position: NotificationPosition) {
         Prefs.position = position

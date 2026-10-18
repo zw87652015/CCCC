@@ -67,6 +67,16 @@ enum L {
     static var menuStartup: String { t("Open at Login", "登录时打开") }
     static var menuLanguage: String { t("Language", "语言") }
     static var menuPosition: String { t("Notification position", "提醒位置") }
+    static var menuAppearance: String { t("Appearance", "外观模式") }
+    static var appearanceAuto: String { t("Follow system", "跟随系统") }
+    static var appearanceLight: String { t("Light", "浅色") }
+    static var appearanceDark: String { t("Dark", "深色") }
+    static var menuDuration: String { t("Display duration", "显示时长") }
+    static var durationDefault: String { t("Default (1.9–2.6 seconds)", "默认（1.9～2.6 秒）") }
+    static func seconds(_ n: Int) -> String { t("\(n) seconds", "\(n) 秒") }
+    static var menuTransparency: String { t("Transparency", "透明度") }
+    static func transparency(_ n: Int) -> String { n == 0 ? t("0% (opaque)", "0%（不透明）") : "\(n)%" }
+    static var menuSimple: String { t("Simple mode", "简易模式") }
     static var positionLeft: String { t("Left", "左") }
     static var positionCenter: String { t("Center", "居中") }
     static var positionRight: String { t("Right", "右") }

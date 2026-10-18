@@ -5,6 +5,10 @@ enum NotificationPosition: String {
     case left, center, right
 }
 
+enum AppearanceMode: String {
+    case auto, light, dark
+}
+
 enum Prefs {
     private static let d = UserDefaults.standard
 
@@ -38,6 +42,29 @@ enum Prefs {
     static var askedInputMonitoring: Bool {
         get { d.bool(forKey: "askedInputMonitoring") }
         set { d.set(newValue, forKey: "askedInputMonitoring") }
+    }
+
+    static var appearance: AppearanceMode {
+        get { AppearanceMode(rawValue: (d.string(forKey: "Appearance") ?? "auto").lowercased()) ?? .auto }
+        set { d.set(newValue.rawValue, forKey: "Appearance") }
+    }
+    static var durationMs: Int {
+        get {
+            let value = d.object(forKey: "DurationMs") as? Int ?? 0
+            return (500...30000).contains(value) ? value : 0
+        }
+        set { d.set(newValue, forKey: "DurationMs") }
+    }
+    static var opacity: Int {
+        get {
+            let value = d.object(forKey: "Opacity") as? Int ?? 100
+            return (25...100).contains(value) ? value : 100
+        }
+        set { d.set(newValue, forKey: "Opacity") }
+    }
+    static var simple: Bool {
+        get { d.bool(forKey: "Simple") }
+        set { d.set(newValue, forKey: "Simple") }
     }
 
     static var autoStart: Bool { SMAppService.mainApp.status == .enabled }
