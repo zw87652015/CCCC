@@ -62,6 +62,7 @@ enum L {
     static var menuShow: String { t("Show clipboard", "查看剪贴板") }
     static var menuPause: String { t("Pause", "暂停") }
     static var menuSound: String { t("Sound", "提示音") }
+    static var menuStopSounds: String { t("Stop all sounds", "停止所有声音") }
     static var menuHint: String { t("Warn when nothing was copied", "没复制上时提醒我") }
     static var menuInput: String { t("Allow Input Monitoring…", "授予“输入监控”权限…") }
     static var menuStartup: String { t("Open at Login", "登录时打开") }
@@ -90,6 +91,67 @@ enum L {
     static var loginItemFailed: String { t("Couldn't change Open at Login", "无法修改登录时打开") }
     static var yes: String { t("Yes", "是") }
     static var no: String { t("No", "否") }
+
+    static var menuSource: String { t("Show source", "显示来源") }
+    static var menuSourceOn: String { t("On", "开启") }
+    static var sourceWhen: String { t("When", "何时显示") }
+    static var sourceAlways: String { t("Always", "总是显示") }
+    static var sourceAuto: String { t("Only when not obvious", "仅在不明显时") }
+    static var sourceDetail: String { t("Detail", "详细程度") }
+    static var detailIcon: String { t("App icon only", "仅应用图标") }
+    static var detailApp: String { t("App name", "应用名称") }
+    static var detailSite: String { t("App + website", "应用 + 网站") }
+    static var detailTitle: String { t("App + website + page/window title", "应用 + 网站 + 页面/窗口标题") }
+    static var universalClipboard: String { t("Universal Clipboard", "通用剪贴板") }
+
+    static var menuCustomize: String { t("Customize…", "自定义…") }
+    static var customizeTitle: String { t("Customize CCCC", "自定义 CCCC") }
+    static var tabGeneral: String { t("General", "常规") }
+    static var tabAppearance: String { t("Appearance", "外观") }
+    static var tabBehavior: String { t("Behavior", "行为") }
+    static var tabSound: String { t("Sound", "声音") }
+    static var tabSource: String { t("Source", "来源") }
+    static var showOnScreen: String { t("Show on screen", "在屏幕上预览") }
+    static var resetDefaults: String { t("Reset to defaults", "恢复默认") }
+    static var resetConfirm: String { t("Reset the card, position, sound and source settings to defaults?", "要将卡片、位置、声音和来源设置恢复为默认吗？") }
+    static var closeWindow: String { t("Close", "关闭") }
+    static var previewTitle: String { t("Preview", "预览") }
+    static var themeTitle: String { t("Theme", "主题") }
+    static var themeSystem: String { t("System", "跟随系统") }
+    static var themeLight: String { t("Light", "浅色") }
+    static var themeDark: String { t("Dark", "深色") }
+    static var paletteTitle: String { t("Palette", "配色") }
+    static var paletteDefault: String { t("Default", "默认") }
+    static var paletteGraphite: String { t("Graphite", "石墨") }
+    static var paletteContrast: String { t("High contrast", "高对比") }
+    static var palettePastel: String { t("Pastel", "柔和") }
+    static var okColorTitle: String { t("Success colour", "成功颜色") }
+    static var warnColorTitle: String { t("Warning colour", "警告颜色") }
+    static var resetColor: String { t("Reset", "重置") }
+    static var fullColors: String { t("Customize all colours", "自定义全部颜色") }
+    static var colorBg: String { t("Background", "背景") }
+    static var colorBorder: String { t("Border", "边框") }
+    static var colorTitle: String { t("Title text", "标题文字") }
+    static var colorSub: String { t("Body text", "正文文字") }
+    static var colorMeta: String { t("Details text", "细节文字") }
+    static var cardSize: String { t("Card size", "卡片大小") }
+    static var fontTitle: String { t("Font", "字体") }
+    static var fontDefault: String { t("Default", "默认") }
+    static var textSize: String { t("Text size", "文字大小") }
+    static var positionTitle: String { t("Position", "位置") }
+    static var posNear: String { t("Near the mouse pointer", "鼠标附近") }
+    static var posRandom: String { t("Random", "随机") }
+    static var durationTitle: String { t("Show for", "停留时间") }
+    static var stayUntilClicked: String { t("Stay until clicked", "直到点击才关闭") }
+    static var playSounds: String { t("Play sounds", "播放提示音") }
+    static var copiedSound: String { t("Copied sound", "复制成功音") }
+    static var failSound: String { t("Nothing copied sound", "未复制成功音") }
+    static var soundBuiltIn: String { t("Built-in", "内置") }
+    static var soundCustom: String { t("Custom file", "自定义文件") }
+    static var browse: String { t("Choose…", "选择…") }
+    static var testSound: String { t("Test", "试听") }
+    static var langSystem: String { t("System", "跟随系统") }
+    static var noFile: String { t("No file", "无文件") }
 
     static var tip: String { t("CCCC · copy with confidence", "CCCC · 放心复制") }
     static var tipPaused: String { t("CCCC · paused", "CCCC · 已暂停") }

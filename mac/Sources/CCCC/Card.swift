@@ -9,6 +9,11 @@ final class Content {
     var thumb: CGImage?
     var count: Int
     var quiet = false
+    var site: String?, sourceBundle: String?
+    var remote = false, secret = false
+    var srcIcon: CGImage?
+    var srcText = ""
+    var srcLine = false
 
     init(kind: Kind = .copied, title: String = "", meta: String = "", sub: String = "", count: Int = 1) {
         self.kind = kind; self.title = title; self.meta = meta; self.sub = sub; self.count = count
@@ -37,8 +42,7 @@ final class CardView: NSView {
 }
 
 final class Card {
-    static let W: CGFloat = 320, H: CGFloat = 64, R: CGFloat = 12, CX: CGFloat = 24, CY: CGFloat = 20
-    static let canvasW = W + 2 * CX, canvasH = H + CY + 32
+    static let R: CGFloat = 12, CX: CGFloat = 24, CY: CGFloat = 20
     private static let edge: CGFloat = 16
 
     let panel: CardPanel
@@ -47,22 +51,35 @@ final class Card {
     var visTarget = 0.0
     var renderNow = 0.0
 
+    // Metrics for the current text scale (k) and user size (sc); `defaults` pins both to 100 for the design sheet.
+    private let defaults: Bool
+    private(set) var W: CGFloat = 320, H: CGFloat = 64, line: CGFloat = 18, hMax: CGFloat = 82
+    private(set) var canvasW: CGFloat = 368, canvasH: CGFloat = 134
+    private(set) var k: CGFloat = 1, sc: CGFloat = 1
+    private var sizeSig = "", themeSig = ""
+    private var fTitle = NSFont.systemFont(ofSize: 14, weight: .semibold)
+    private var fSub = NSFont.systemFont(ofSize: 12.5)
+    private var fMeta = NSFont.systemFont(ofSize: 12)
+    private var fBadge = NSFont.systemFont(ofSize: 12, weight: .semibold)
+
     private var timer: Timer?
     private var cur: Content?
-    private var shown = false, repeatHit = false, hoverArmed = false
+    private var shown = false, repeatHit = false, hoverArmed = false, slideDown = false
+    private var lastRoll = -1
+    private var slot = CGPoint.zero
     private var vis = 0.0, last = 0.0, deadline = 0.0, duration = 2.0
     private var tEvent = -9.0, tPop = -9.0, tBump = -9.0, tShake = -9.0, tText = -9.0, tTitle = -9.0
-    private var baseX: CGFloat = 0, baseY: CGFloat = 0
 
-    private let fTitle = NSFont.systemFont(ofSize: 14, weight: .semibold)
-    private let fSub = NSFont.systemFont(ofSize: 12.5)
-    private let fMeta = NSFont.systemFont(ofSize: 12)
-    private let fBadge = NSFont.systemFont(ofSize: 12, weight: .semibold)
+    private var baseX: CGFloat { slot.x - Card.CX * sc }
+    private var baseY: CGFloat { slot.y - (canvasH - Card.CY - hMax) * sc }
+    private var cardH: CGFloat { cur?.srcLine == true ? hMax : H }
+    private var cardTop: CGFloat { Card.CY + hMax - cardH }
 
     var now: Double { ProcessInfo.processInfo.systemUptime }
 
-    init() {
-        let frame = NSRect(x: 0, y: 0, width: Card.canvasW, height: Card.canvasH)
+    init(defaults: Bool = false) {
+        self.defaults = defaults
+        let frame = NSRect(x: 0, y: 0, width: 368, height: 134)
         panel = CardPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         view = CardView(frame: frame)
         panel.contentView = view
@@ -76,6 +93,81 @@ final class Card {
         panel.animationBehavior = .none
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         view.card = self
+        apply()
+    }
+
+    // Rebuilds metrics and fonts only when their inputs change; theme settings re-resolve only the theme.
+    func apply() {
+        let pct = defaults ? 100 : Prefs.textScale
+        let family = defaults ? nil : Prefs.fontFamily
+        let size = "\(pct)|\(family ?? "")|\(L.zh)"
+        if size != sizeSig {
+            sizeSig = size
+            k = CGFloat(pct) / 100
+            W = (320 * (0.5 + 0.5 * k)).rounded()
+            H = max(64, 25 + 39 * k)
+            line = 18 * k
+            hMax = H + line
+            canvasW = W + 2 * Card.CX
+            canvasH = hMax + Card.CY + 32
+            fonts(family)
+        }
+        sc = defaults ? 1 : CGFloat(Prefs.scale) / 100
+        if !defaults {
+            let dark = Theme.systemDark()
+            let t = [Prefs.themeMode, Prefs.palette].map { String($0) }.joined(separator: "|") + "|\(Prefs.fullPalette)|\(Prefs.okColor ?? "")|\(Prefs.warnColor ?? "")|\(Prefs.bgColor ?? "")|\(Prefs.borderColor ?? "")|\(Prefs.titleColor ?? "")|\(Prefs.subColor ?? "")|\(Prefs.metaColor ?? "")|\(dark)"
+            if t != themeSig {
+                themeSig = t
+                th = Theme.resolve(systemDark: dark)
+            }
+        }
+        let size2 = NSSize(width: canvasW * sc, height: canvasH * sc)
+        panel.setContentSize(size2)
+        view.frame = NSRect(origin: .zero, size: size2)
+    }
+
+    private func fonts(_ family: String?) {
+        if let f = family {
+            fTitle = familyFont(f, 14 * k, bold: true)
+            fSub = familyFont(f, 12.5 * k, bold: false)
+            fMeta = familyFont(f, 12 * k, bold: false)
+            fBadge = familyFont(f, 12 * k, bold: true)
+        } else {
+            fTitle = NSFont.systemFont(ofSize: 14 * k, weight: .semibold)
+            fSub = NSFont.systemFont(ofSize: 12.5 * k)
+            fMeta = NSFont.systemFont(ofSize: 12 * k)
+            fBadge = NSFont.systemFont(ofSize: 12 * k, weight: .semibold)
+        }
+    }
+
+    private func familyFont(_ family: String, _ size: CGFloat, bold: Bool) -> NSFont {
+        let base = NSFontManager.shared.font(withFamily: family, traits: [], weight: 5, size: size) ?? NSFont.systemFont(ofSize: size)
+        return bold ? NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask) : base
+    }
+
+    // Bottom-left origin of a `card`-sized box at grid position `pos` (0-8, row-major from the top),
+    // or beside the cursor for 9 (below-right, flipping above or left when it would overflow).
+    static func place(pos: Int, work: CGRect, card: CGSize, cursor: CGPoint, margin: CGFloat) -> CGPoint {
+        if pos == 9 {
+            var x = cursor.x + margin
+            var y = cursor.y - margin - card.height
+            if x + card.width > work.maxX { x = cursor.x - margin - card.width }
+            if y < work.minY { y = cursor.y + margin }
+            x = max(work.minX, min(x, work.maxX - card.width))
+            y = max(work.minY, min(y, work.maxY - card.height))
+            return CGPoint(x: x, y: y)
+        }
+        let col = pos % 3, row = pos / 3
+        let x = col == 0 ? work.minX + margin : col == 1 ? work.minX + (work.width - card.width) / 2 : work.maxX - margin - card.width
+        let y = row == 0 ? work.maxY - margin - card.height : row == 1 ? work.minY + (work.height - card.height) / 2 : work.minY + margin
+        return CGPoint(x: x, y: y)
+    }
+
+    private func roll() -> Int {
+        var r = 0
+        repeat { r = Int.random(in: 0...8) } while r == lastRoll
+        lastRoll = r
+        return r
     }
 
     func show(_ c: Content, repeat rep: Bool) {
@@ -93,8 +185,9 @@ final class Card {
             tText = t
         }
         if c.kind == .fail { tShake = t }
-        duration = c.kind == .info || c.kind == .empty ? 2.6 : 1.9
-        deadline = t + duration
+        let info = c.kind == .info || c.kind == .empty
+        duration = info ? Double(Prefs.durationMs + 700) / 1000 : Double(Prefs.durationMs) / 1000
+        deadline = Prefs.stayUntilClicked ? .infinity : t + duration
         visTarget = 1
 
         if !fresh { return }
@@ -107,7 +200,7 @@ final class Card {
         timer = tm
     }
 
-    // Renders a frozen moment `age` seconds after an event, for the design sheet.
+    // Renders a frozen moment `age` seconds after an event, for the design sheet and the settings preview.
     func still(_ c: Content, repeat rep: Bool, age: Double) {
         let t = 100 - age
         cur = c; repeatHit = rep
@@ -118,16 +211,17 @@ final class Card {
     }
 
     private func prepare() {
+        apply()
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
-        let vf = screen.visibleFrame
-        th = Theme.current
-        baseX = vf.minX + Card.edge - Card.CX
-        baseY = vf.minY + Card.edge - (Card.canvasH - Card.CY - Card.H)
+        let pos = Prefs.position == 10 ? roll() : Prefs.position
+        slideDown = pos <= 2
+        slot = Card.place(pos: pos, work: screen.visibleFrame, card: CGSize(width: W * sc, height: hMax * sc),
+                          cursor: mouse, margin: Card.edge * sc)
     }
 
     private func cursorInCard() -> Bool {
-        let r = CGRect(x: baseX + Card.CX, y: baseY + (Card.canvasH - Card.CY - Card.H), width: Card.W, height: Card.H)
+        let r = CGRect(x: baseX + Card.CX * sc, y: baseY + (canvasH - Card.CY - hMax) * sc, width: W * sc, height: cardH * sc)
         return r.contains(NSEvent.mouseLocation)
     }
 
@@ -147,7 +241,7 @@ final class Card {
         renderNow = t
         view.needsDisplay = true
 
-        let dy = CGFloat((1 - Ease.outQuint(vis)) * 18)
+        let dy = CGFloat((1 - Ease.outQuint(vis)) * 18) * (slideDown ? -1 : 1)
         var dx: CGFloat = 0
         let ts = t - tShake
         if ts >= 0 && ts < 0.5 {
@@ -172,21 +266,22 @@ final class Card {
         let accent = warn ? th.warn : th.ok
         let te = t - tEvent
         let m = ctx.userSpaceToDeviceSpaceTransform
-        let px = sqrt(abs(m.a * m.d - m.b * m.c))
+        let px = sqrt(abs(m.a * m.d - m.b * m.c)) * sc
 
         ctx.saveGState()
         defer { ctx.restoreGState() }
+        ctx.scaleBy(x: sc, y: sc)
 
         let tp = t - tPop
         if tp >= 0 && tp < 0.24 {
             let k = 1 + 0.03 * CGFloat(sin(.pi * tp / 0.24))
-            let cx = Card.CX + Card.W / 2, cy = Card.CY + Card.H / 2
+            let cx = Card.CX + W / 2, cy = cardTop + cardH / 2
             ctx.translateBy(x: cx, y: cy)
             ctx.scaleBy(x: k, y: k)
             ctx.translateBy(x: -cx, y: -cy)
         }
 
-        let card = CGRect(x: Card.CX, y: Card.CY, width: Card.W, height: Card.H)
+        let card = CGRect(x: Card.CX, y: cardTop, width: W, height: cardH)
         let path = Shapes.roundRect(card, Card.R)
         shadowPass(ctx, path, offset: 5, blur: 15, alpha: th.shadowFar, px: px)
         shadowPass(ctx, path, offset: 1, blur: 3, alpha: th.shadowNear, px: px)
@@ -207,8 +302,8 @@ final class Card {
         ctx.strokePath()
 
         let remain = Ease.clamp01((deadline - t) / duration)
-        if visTarget > 0 && remain > 0 {
-            let x0 = Card.CX + Card.R, x1 = Card.CX + Card.W - Card.R, y = Card.CY + Card.H - 3
+        if visTarget > 0 && remain > 0 && !Prefs.stayUntilClicked {
+            let x0 = Card.CX + Card.R, x1 = Card.CX + W - Card.R, y = cardTop + cardH - 3
             ctx.setStrokeColor(accent.withAlphaComponent(th.dark ? 70 / 255 : 60 / 255).cgColor)
             ctx.setLineWidth(2)
             ctx.setLineCap(.round)
@@ -232,7 +327,8 @@ final class Card {
     }
 
     private func drawIcon(_ ctx: CGContext, te: Double, accent: NSColor, warn: Bool) {
-        let ix = Card.CX + 32, iy = Card.CY + Card.H / 2
+        let ix = Card.CX + 32, iy = cardTop + cardH / 2
+        let glyph = th.glyph(accent).cgColor
 
         let tr = te - 0.04
         if tr >= 0 && tr < 0.6 {
@@ -251,7 +347,7 @@ final class Card {
         ctx.fillEllipse(in: CGRect(x: ix - r, y: iy - r, width: 2 * r, height: 2 * r))
 
         let pc = Ease.outCubic((te - 0.1) / 0.26)
-        ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
+        ctx.setStrokeColor(glyph)
         ctx.setLineWidth(2.4)
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
@@ -259,7 +355,7 @@ final class Card {
             strokePartial(ctx, [CGPoint(x: ix, y: iy - 6 * k), CGPoint(x: ix, y: iy + 1.2 * k)], pc / 0.7)
             if pc > 0.6 {
                 let dr = max(0, 1.45 * k * CGFloat(Ease.outBack((pc - 0.6) / 0.4)))
-                ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+                ctx.setFillColor(glyph)
                 ctx.fillEllipse(in: CGRect(x: ix - dr, y: iy + 5.2 * k - dr, width: 2 * dr, height: 2 * dr))
             }
         } else {
@@ -280,10 +376,10 @@ final class Card {
     }
 
     private func drawText(_ ctx: CGContext, _ c: Content, now t: Double, accent: NSColor) {
-        var right = Card.CX + Card.W - 14
+        var right = Card.CX + W - 14
 
         if let thumb = c.thumb {
-            let tr = CGRect(x: Card.CX + Card.W - 12 - 40, y: Card.CY + 12, width: 40, height: 40)
+            let tr = CGRect(x: Card.CX + W - 12 - 40, y: cardTop + (cardH - 40) / 2, width: 40, height: 40)
             ctx.saveGState()
             ctx.addPath(Shapes.roundRect(tr, 8))
             ctx.clip()
@@ -298,9 +394,9 @@ final class Card {
 
         if c.count >= 2 {
             let bt = "×\(c.count)"
-            let bh: CGFloat = 22
+            let bh: CGFloat = 22 * k
             let bw = max(28, measure(bt, fBadge) + 16)
-            let bx = right - bw, by = Card.CY + (Card.H - bh) / 2
+            let bx = right - bw, by = cardTop + (cardH - bh) / 2
             let tb = t - tBump
             let bk = tb >= 0 && tb < 0.6 ? 1 + 0.3 * CGFloat(exp(-7 * tb) * cos(16 * tb)) : 1
             let cx = bx + bw / 2, cy = by + bh / 2
@@ -321,20 +417,52 @@ final class Card {
         let la = CGFloat(Ease.outCubic((t - tTitle) / 0.28))
         let tx = Card.CX + 58 + 6 * (1 - ta)
         let maxW = max(10, right - tx)
-        let top = Card.CY + (L.zh ? 10 : 11)
+        let top = cardTop + (L.zh ? 10 : 11)
 
-        drawLine(c.title, fTitle, th.title.withAlphaComponent(ta * la), x: tx, y: top + 5 * (1 - la), w: maxW, h: 22)
+        drawLine(c.title, fTitle, th.title.withAlphaComponent(ta * la), x: tx, y: top + 5 * (1 - la), w: maxW, h: 22 * k)
 
+        let tw = measure(c.title, fTitle)
+        var end = tx + min(tw, maxW)
         if !c.meta.isEmpty {
-            let tw = measure(c.title, fTitle)
             let mw = measure(c.meta, fMeta)
             let mx = tx + tw + 8
             if mx + mw <= tx + maxW {
-                drawLine(c.meta, fMeta, th.meta.withAlphaComponent(ta), x: mx, y: top + 2.2, w: tx + maxW - mx, h: 20)
+                drawLine(c.meta, fMeta, th.meta.withAlphaComponent(ta), x: mx, y: top + 2.2 * k, w: maxW - (mx - tx), h: 20 * k)
+                end = mx + mw
             }
         }
 
-        drawLine(c.sub, fSub, th.sub.withAlphaComponent(ta), x: tx, y: top + 21, w: maxW, h: 20)
+        let x0 = end + 10
+        if c.srcLine {
+            var lx = tx
+            if let icon = c.srcIcon {
+                drawSrcIcon(ctx, icon, x: tx, y: top + 40 * k, alpha: ta)
+                lx = tx + 18 * k
+            }
+            if !c.srcText.isEmpty {
+                drawLine(c.srcText, fMeta, th.meta.withAlphaComponent(ta), x: lx, y: top + 39 * k, w: maxW - (lx - tx), h: 20 * k)
+            }
+        } else if x0 + 14 * k <= tx + maxW {
+            var textX = x0
+            if let icon = c.srcIcon {
+                drawSrcIcon(ctx, icon, x: x0, y: top + 3 * k, alpha: ta)
+                textX = x0 + 18 * k
+            }
+            let sw = tx + maxW - textX
+            if !c.srcText.isEmpty && sw >= 24 {
+                drawLine(c.srcText, fMeta, th.meta.withAlphaComponent(ta), x: textX, y: top + 2.2 * k, w: sw, h: 20 * k)
+            }
+        }
+
+        drawLine(c.sub, fSub, th.sub.withAlphaComponent(ta), x: tx, y: top + 21 * k, w: maxW, h: 20 * k)
+    }
+
+    private func drawSrcIcon(_ ctx: CGContext, _ icon: CGImage, x: CGFloat, y: CGFloat, alpha: CGFloat) {
+        ctx.saveGState()
+        ctx.setAlpha(alpha)
+        ctx.interpolationQuality = .high
+        ctx.drawFlipped(icon, in: CGRect(x: x, y: y, width: 14 * k, height: 14 * k))
+        ctx.restoreGState()
     }
 
     private func drawLine(_ s: String, _ font: NSFont, _ color: NSColor, x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat,

@@ -15,6 +15,29 @@ func rgba(_ r: Int, _ g: Int, _ b: Int, _ a: Int = 255) -> NSColor {
     NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: CGFloat(a) / 255)
 }
 
+// WCAG relative luminance: 0 black, 1 white.
+func luminance(_ c: NSColor) -> Double {
+    let s = c.usingColorSpace(.sRGB) ?? c
+    func lin(_ v: CGFloat) -> Double {
+        let x = Double(v)
+        return x <= 0.03928 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * lin(s.redComponent) + 0.7152 * lin(s.greenComponent) + 0.0722 * lin(s.blueComponent)
+}
+
+// "#AARRGGBB" as stored in Prefs; nil when unset or malformed.
+func hexColor(_ s: String?) -> NSColor? {
+    guard let s = s, s.count == 9, s.hasPrefix("#"), let v = UInt32(s.dropFirst(), radix: 16) else { return nil }
+    return NSColor(srgbRed: CGFloat((v >> 16) & 255) / 255, green: CGFloat((v >> 8) & 255) / 255,
+                   blue: CGFloat(v & 255) / 255, alpha: CGFloat(v >> 24) / 255)
+}
+
+func hexString(_ c: NSColor) -> String {
+    let s = c.usingColorSpace(.sRGB) ?? c
+    func byte(_ v: CGFloat) -> Int { Int((v * 255).rounded()) }
+    return String(format: "#%02X%02X%02X%02X", byte(s.alphaComponent), byte(s.redComponent), byte(s.greenComponent), byte(s.blueComponent))
+}
+
 struct Theme {
     let dark: Bool
     let bg, border, title, sub, meta, ok, warn: NSColor
@@ -32,8 +55,53 @@ struct Theme {
         sub: rgba(98, 98, 106), meta: rgba(150, 150, 158), ok: rgba(30, 168, 74), warn: rgba(232, 138, 0),
         shadowFar: 0.22, shadowNear: 0.12)
 
-    static var current: Theme {
-        NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? darkTheme : lightTheme
+    // Palette index 1..3 as Prefs.palette; dark then light for each.
+    private static func make(_ dark: Bool, _ bg: NSColor, _ border: NSColor, _ title: NSColor, _ sub: NSColor,
+                             _ meta: NSColor, _ ok: NSColor, _ warn: NSColor) -> Theme {
+        Theme(dark: dark, bg: bg, border: border, title: title, sub: sub, meta: meta, ok: ok, warn: warn,
+              shadowFar: dark ? 0.55 : 0.22, shadowNear: dark ? 0.35 : 0.12)
+    }
+
+    private static let palettes: [Theme] = [
+        make(true, rgba(32, 32, 34), rgba(255, 255, 255, 30), rgba(240, 240, 240), rgba(170, 170, 170), rgba(120, 120, 120), rgba(120, 120, 128), rgba(200, 150, 60)),
+        make(false, rgba(250, 250, 250), rgba(0, 0, 0, 24), rgba(24, 24, 24), rgba(96, 96, 96), rgba(150, 150, 150), rgba(70, 70, 76), rgba(190, 130, 40)),
+        make(true, rgba(0, 0, 0), rgba(255, 255, 255, 120), rgba(255, 255, 255), rgba(230, 230, 230), rgba(200, 200, 200), rgba(0, 200, 80), rgba(255, 190, 0)),
+        make(false, rgba(255, 255, 255), rgba(0, 0, 0, 140), rgba(0, 0, 0), rgba(30, 30, 30), rgba(70, 70, 70), rgba(0, 130, 50), rgba(190, 100, 0)),
+        make(true, rgba(44, 40, 56), rgba(255, 255, 255, 26), rgba(248, 244, 255), rgba(196, 188, 214), rgba(146, 138, 166), rgba(126, 214, 170), rgba(255, 190, 130)),
+        make(false, rgba(250, 246, 255), rgba(60, 40, 100, 24), rgba(40, 32, 56), rgba(110, 100, 130), rgba(160, 150, 180), rgba(88, 180, 136), rgba(240, 160, 90)),
+    ]
+
+    static func palette(_ p: Int, dark: Bool) -> Theme {
+        if p == 0 { return dark ? darkTheme : lightTheme }
+        return palettes[(p - 1) * 2 + (dark ? 0 : 1)]
+    }
+
+    // Same rules as Theme.Resolve in src/Gfx.cs.
+    static func resolve(systemDark: Bool) -> Theme {
+        let dark = Prefs.themeMode == 2 || (Prefs.themeMode == 0 && systemDark)
+        let v = palette(Prefs.palette, dark: dark)
+        var bg = v.bg, border = v.border, title = v.title, sub = v.sub, meta = v.meta
+        let ok = hexColor(Prefs.okColor) ?? v.ok
+        let warn = hexColor(Prefs.warnColor) ?? v.warn
+        if Prefs.fullPalette {
+            bg = hexColor(Prefs.bgColor) ?? bg
+            border = hexColor(Prefs.borderColor) ?? border
+            title = hexColor(Prefs.titleColor) ?? title
+            sub = hexColor(Prefs.subColor) ?? sub
+            meta = hexColor(Prefs.metaColor) ?? meta
+        }
+        let isDark = luminance(bg) < 0.5
+        let far = isDark == v.dark ? v.shadowFar : (isDark ? darkTheme.shadowFar : lightTheme.shadowFar)
+        let near = isDark == v.dark ? v.shadowNear : (isDark ? darkTheme.shadowNear : lightTheme.shadowNear)
+        return Theme(dark: isDark, bg: bg, border: border, title: title, sub: sub, meta: meta, ok: ok, warn: warn,
+                     shadowFar: far, shadowNear: near)
+    }
+
+    // Dark glyph on bright accents, white otherwise.
+    func glyph(_ accent: NSColor) -> NSColor { luminance(accent) > 0.7 ? rgba(30, 30, 30) : rgba(255, 255, 255) }
+
+    static func systemDark() -> Bool {
+        NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 }
 

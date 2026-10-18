@@ -8,8 +8,13 @@ $ico = Join-Path $bin 'cccc.ico'
 New-Item -ItemType Directory -Force $bin, $dist | Out-Null
 
 $src = Get-ChildItem (Join-Path $root 'src') -Filter *.cs | ForEach-Object { $_.FullName }
+$fw = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
+$wpf = Join-Path $fw 'WPF'
 $opts = @('/nologo', '/target:winexe', '/optimize+', '/debug-', "/win32manifest:$root\app.manifest",
-          '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Web.Extensions.dll', "/out:$exe")
+          '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Web.Extensions.dll',
+          "/r:$wpf\PresentationFramework.dll", "/r:$wpf\PresentationCore.dll", "/r:$wpf\WindowsBase.dll",
+          "/r:$fw\System.Xaml.dll", "/r:$wpf\WindowsFormsIntegration.dll",
+          "/resource:$root\src\Customize.xaml,Cccc.Customize.xaml", "/out:$exe")
 
 # Pass 1 builds the app, which then draws its own icon; pass 2 embeds it.
 & $csc @opts @src

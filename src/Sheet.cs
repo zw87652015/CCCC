@@ -11,7 +11,8 @@ namespace Cccc
         public static void Render(string path)
         {
             const float s = 1.5f;
-            int cw = (int)Math.Ceiling(Card.CanvasW * s), ch = (int)Math.Ceiling(Card.CanvasH * s);
+            var card = new Card();
+            int cw = (int)Math.Ceiling(card.CanvasW * s), ch = (int)Math.Ceiling(card.CanvasH * s);
             var rows = Rows();
             int iconRow = 120;
             using (var sheet = new Bitmap(cw * 2, ch * rows.Length + iconRow, PixelFormat.Format32bppArgb))
@@ -25,7 +26,6 @@ namespace Cccc
                 var themes = new[] { Theme.DarkTheme, Theme.LightTheme };
                 for (int col = 0; col < 2; col++)
                 {
-                    var card = new Card();
                     card.Layout(s, themes[col]);
                     for (int row = 0; row < rows.Length; row++)
                     {
@@ -58,6 +58,7 @@ namespace Cccc
                 g.FillEllipse(Brushes.White, 46, 14, 20, 20);
             }
             string text = L.Zh ? "放心复制：让 Ctrl+C 也有看得见的成功" : "The quick brown fox jumps over the lazy dog";
+            var appIcon = Icons.App(32);
             return new[]
             {
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text }, false, 1.2),
@@ -68,6 +69,10 @@ namespace Cccc
                 Row(new Content { Kind = Kind.Cut, Title = L.Cut, Meta = L.Items(3), Sub = "report.pdf, photo.png, 笔记.txt" }, false, 1.2),
                 Row(new Content { Kind = Kind.Fail, Title = L.NothingCopied, Sub = L.StillHolding + text, Count = 2 }, true, 1.2),
                 Row(new Content { Kind = Kind.Info, Title = L.ReadyTitle, Sub = L.ReadySub }, false, 1.2),
+                Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text, SrcIcon = appIcon, SrcText = "Google Chrome · github.com", SrcLine = true }, false, 1.2),
+                Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Link, Sub = "github.com/microsoft/terminal/issues/1234", SrcIcon = appIcon }, false, 1.2),
+                Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text, SrcIcon = appIcon, SrcText = "Visual Studio Code · github.com · Pull request #1234: Add customizable source display", SrcLine = true }, false, 1.2),
+                Row(new Content { Kind = Kind.Fail, Title = L.NothingCopied, Sub = L.StillHolding + text, SrcIcon = appIcon, SrcText = "Microsoft Word" }, false, 1.2),
             };
         }
 

@@ -1,0 +1,1128 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Interop;
+using System.Windows.Markup;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
+using System.Windows.Threading;
+using Microsoft.Win32;
+
+namespace Cccc
+{
+    // Windows 11 style settings window (WPF). Every control writes straight into the settings and calls `changed`;
+    // `loading` blocks those writes while Reload pushes values back.
+    sealed class Customize
+    {
+        sealed class Colour
+        {
+            public Button Swatch, Reset;
+            public TextBlock Hex;
+            public UIElement Inline, Row;
+            public Func<string> Get;
+            public Action<string> Put;
+            public Func<Theme, System.Drawing.Color> Pick;
+            public bool Full;
+        }
+
+        sealed class Sound
+        {
+            public string Title;
+            public TextBlock Hint;
+            public Border Seg;
+            public RadioButton BuiltIn, Custom;
+            public Button Browse, Play;
+            public Func<string> Get;
+            public Action<string> Put;
+            public bool Ok;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct Margins { public int Left, Right, Top, Bottom; }
+
+        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+        [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref Margins margins);
+
+        static readonly uint[] Presets =
+        {
+            0xFF30D158, 0xFF0A84FF, 0xFF5E5CE6, 0xFFBF5AF2, 0xFFFF375F, 0xFFFF453A,
+            0xFFFF9F0A, 0xFFFFD60A, 0xFF32D74B, 0xFF64D2FF, 0xFFAC8E68, 0xFF8E8E93,
+            0xFFFFFFFF, 0xFF000000, 0xFFFFAC1C, 0xFF2EC4B6, 0xFFF4A261, 0xFF6B6B6B,
+        };
+
+        // Set by the harness for screenshots that must not depend on Mica.
+        public static bool UseMica = true;
+
+        public event EventHandler Closed;
+
+        readonly Settings set;
+        readonly Action changed;
+        readonly Action<bool> showSample, test;
+        readonly Card card = new Card();
+        readonly Window w;
+        readonly DispatcherTimer armTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        readonly RadioButton[] navs = new RadioButton[5];
+        readonly StackPanel[] pages = new StackPanel[5];
+        readonly TextBlock txtTitle;
+        readonly Button btnReset;
+        readonly StackPanel pageHost;
+        readonly ScrollViewer pageScroll;
+        readonly List<string> fonts = new List<string>();
+        readonly List<Button> presetButtons = new List<Button>();
+        readonly Colour[] colours = new Colour[7];
+        readonly Button[] tiles = new Button[4];
+        readonly ToggleButton[] spots = new ToggleButton[9];
+        readonly RadioButton[] rbDetail = new RadioButton[4];
+        RadioButton[] rbLang, rbTheme, rbWhen;
+        CheckBox chkPause, chkWarn, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay;
+        ToggleButton chipNear, chipFree;
+        Border monitorEl, miniCard;
+        Grid spotsPanel;
+        Canvas overlay;
+        TextBlock hintFree;
+        bool miniDrag;
+        double miniOffX, miniOffY;
+        Slider sldSize, sldText, sldDur;
+        TextBlock lblSize, lblText, lblDur;
+        ComboBox cmbFont;
+        Sound soundOk, soundFail;
+        Button chevron;
+        FrameworkElement fullBody;
+        UIElement whenPanel, detailPanel;
+        StackPanel sourceBody;
+        Popup popColour;
+        Border popBody;
+        TextBox txtHex;
+        TextBlock hexHint;
+        Colour popFor;
+        bool loading, armed, dark, builtZh, expanded, lastFull, popLoading, switching;
+        int page;
+
+        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action<bool> onTest)
+        {
+            set = settings;
+            changed = onChanged;
+            showSample = onShowSample;
+            test = onTest;
+
+            using (var s = typeof(Customize).Assembly.GetManifestResourceStream("Cccc.Customize.xaml"))
+                w = (Window)XamlReader.Load(s);
+            w.Closed += delegate
+            {
+                SystemEvents.UserPreferenceChanged -= OnSystemChange;
+                if (Closed != null) Closed(this, EventArgs.Empty);
+            };
+            w.SourceInitialized += delegate { ApplyMica(); };
+            txtTitle = (TextBlock)w.FindName("txtTitle");
+            btnReset = (Button)w.FindName("btnReset");
+            pageHost = (StackPanel)w.FindName("pageHost");
+            pageScroll = (ScrollViewer)w.FindName("pageScroll");
+            w.Icon = ToSource(Icons.App(32));
+            ((Image)w.FindName("appIcon")).Source = w.Icon;
+
+            ApplyTheme();
+            BuildNav();
+            btnReset.Style = Res<Style>("Link");
+            btnReset.Click += delegate { OnReset(); };
+            armTimer.Tick += delegate { armTimer.Stop(); armed = false; btnReset.Content = L.ResetDefaults; };
+            BuildPages();
+            LocalizeChrome();
+            ShowPage(0);
+            Reload();
+            SystemEvents.UserPreferenceChanged += OnSystemChange;
+        }
+
+        void OnSystemChange(object sender, UserPreferenceChangedEventArgs e)
+        {
+            w.Dispatcher.BeginInvoke(new Action(Reload));
+        }
+
+        public void Show()
+        {
+            System.Windows.Forms.Integration.ElementHost.EnableModelessKeyboardInterop(w);
+            w.Show();
+        }
+
+        public void Activate() { w.Activate(); }
+
+        // MARK: Sync
+
+        public void Reload()
+        {
+            loading = true;
+            ApplyTheme();
+            bool rebuilt = builtZh != L.Zh;
+            if (rebuilt)
+            {
+                pageHost.Children.Clear();
+                BuildPages();
+                LocalizeChrome();
+                ShowPage(page);
+            }
+            bool turnedOn = set.FullPalette && !lastFull;
+            lastFull = set.FullPalette;
+            if (turnedOn) expanded = true;
+            chkPause.IsChecked = set.Paused;
+            chkWarn.IsChecked = set.FailHint;
+            chkStart.IsChecked = Settings.AutoStart;
+            chkAuto.IsChecked = set.AutoUpdate;
+            rbLang[set.Lang == "en" ? 1 : set.Lang == "zh" ? 2 : 0].IsChecked = true;
+            rbTheme[set.ThemeMode].IsChecked = true;
+            for (int i = 0; i < tiles.Length; i++) tiles[i].Tag = i == set.Palette ? "selected" : null;
+            var theme = Theme.Resolve(set, !Theme.SystemLight());
+            foreach (Colour c in colours)
+            {
+                string v = c.Get();
+                System.Drawing.Color parsed;
+                System.Drawing.Color shown = Theme.TryColor(v, out parsed) ? parsed : c.Pick(theme);
+                c.Swatch.Background = Tint(shown);
+                c.Hex.Text = Hex6(shown);
+                c.Reset.Visibility = v != null ? Visibility.Visible : Visibility.Collapsed;
+            }
+            chkFull.IsChecked = set.FullPalette;
+            if (rebuilt || !w.IsLoaded) SyncExpanded();
+            else if (turnedOn) SyncExpanded(true);
+            sldSize.Value = set.Scale;
+            sldText.Value = set.TextScale;
+            sldDur.Value = set.DurationMs;
+            sldDur.IsEnabled = !set.StayUntilClicked;
+            lblSize.Text = set.Scale + "%";
+            lblText.Text = set.TextScale + "%";
+            lblDur.Text = (set.DurationMs / 1000.0).ToString("0.0") + " s";
+            int fi = fonts.IndexOf(set.FontFamily);
+            cmbFont.SelectedIndex = fi < 0 ? 0 : fi;
+            for (int i = 0; i < spots.Length; i++) spots[i].IsChecked = set.Position == i;
+            chipNear.IsChecked = set.Position == 9;
+            chipFree.IsChecked = set.Position == 10;
+            SyncFree();
+            chkStay.IsChecked = set.StayUntilClicked;
+            chkSound.IsChecked = set.Sound;
+            ShowSound(soundOk);
+            ShowSound(soundFail);
+            chkSource.IsChecked = set.ShowSource;
+            rbWhen[set.SourceWhen].IsChecked = true;
+            for (int i = 0; i < rbDetail.Length; i++) rbDetail[i].IsChecked = set.SourceDetail == i;
+            Reveal(sourceBody, set.ShowSource, w.IsLoaded && !rebuilt);
+            loading = false;
+            card.Apply(set);
+        }
+
+        // The copied card mirrors almost every display setting; warn colour and the fail hint only affect the
+        // failed card; everything else (pause, autostart, auto-update, sound files) shows nothing.
+        static string SigShared(Settings s)
+        {
+            return string.Join("|", new object[] { s.ThemeMode, s.Palette, s.OkColor, s.BgColor, s.BorderColor, s.TitleColor,
+                s.SubColor, s.MetaColor, s.FullPalette, s.FontFamily, s.Scale, s.TextScale, s.Position, s.FreeX, s.FreeY,
+                s.DurationMs, s.StayUntilClicked, s.ShowSource, s.SourceWhen, s.SourceDetail, s.Lang });
+        }
+
+        static string SigFailed(Settings s) { return s.WarnColor + "|" + s.FailHint; }
+
+        // Every user change: apply once through `changed`, re-sync the window, then pop the real card on screen.
+        void Edit(Action a)
+        {
+            if (loading) return;
+            string shared = SigShared(set), failed = SigFailed(set);
+            a();
+            changed();
+            Reload();
+            if (SigShared(set) != shared) showSample(false);
+            else if (SigFailed(set) != failed && set.FailHint) showSample(true);
+        }
+
+        // MARK: Theme and chrome
+
+        void ApplyTheme()
+        {
+            bool sysLight = Theme.SystemLight();
+            dark = set.ThemeMode == 2 || (set.ThemeMode == 0 && !sysLight);
+            var t = Theme.Resolve(set, !sysLight);
+            w.Resources["Accent"] = Tint(t.Ok);
+            w.Resources["AccentLow"] = Tint(System.Drawing.Color.FromArgb(0x33, t.Ok));
+            w.Resources["AccentHalf"] = Tint(System.Drawing.Color.FromArgb(0x80, t.Ok));
+            w.Resources["AccentText"] = Tint(Theme.Glyph(t.Ok));
+            w.Resources["WinBg"] = Solid(dark ? "#202020" : "#F3F3F3");
+            w.Resources["Surface"] = Solid(dark ? "#2B2B2B" : "#FFFFFF");
+            w.Resources["CardSurface"] = Solid(dark ? "#0DFFFFFF" : "#B3FFFFFF");
+            w.Resources["CardStroke"] = Solid(dark ? "#14FFFFFF" : "#0F000000");
+            w.Resources["TextBrush"] = Solid(dark ? "#FFFFFF" : "#1A1A1A");
+            w.Resources["SecondaryText"] = Solid(dark ? "#A0FFFFFF" : "#5F5F5F");
+            w.Resources["ControlFill"] = Solid(dark ? "#0FFFFFFF" : "#B3FFFFFF");
+            w.Resources["ControlStroke"] = Solid(dark ? "#18FFFFFF" : "#14000000");
+            w.Resources["NavFill"] = Solid(dark ? "#0FFFFFFF" : "#09000000");
+            w.Resources["PressFill"] = Solid(dark ? "#08FFFFFF" : "#4DF9F9F9");
+            w.Resources["ThumbFill"] = Solid("#FFFFFF");
+            w.Resources["ThumbStroke"] = Solid("#33000000");
+            w.Resources["UiFont"] = new FontFamily(L.Zh ? "Microsoft YaHei UI" : FirstInstalled("Segoe UI Variable Text", "Segoe UI"));
+            w.Resources["IconFont"] = new FontFamily(FirstInstalled("Segoe Fluent Icons", "Segoe MDL2 Assets"));
+            ApplyDwm();
+        }
+
+        // The dark caption lives behind attribute 20, so it has to follow every theme change, not just Mica setup.
+        void ApplyDwm()
+        {
+            IntPtr hwnd = new WindowInteropHelper(w).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            int dk = dark ? 1 : 0;
+            DwmSetWindowAttribute(hwnd, 20, ref dk, 4);
+        }
+
+        static string FirstInstalled(params string[] names)
+        {
+            foreach (string n in names)
+                foreach (FontFamily f in Fonts.SystemFontFamilies)
+                    if (string.Equals(f.Source, n, StringComparison.OrdinalIgnoreCase)) return n;
+            return names[names.Length - 1];
+        }
+
+        void ApplyMica()
+        {
+            if (!UseMica) return;
+            IntPtr hwnd = new WindowInteropHelper(w).Handle;
+            int mica = 2;
+            if (DwmSetWindowAttribute(hwnd, 38, ref mica, 4) == 0)
+            {
+                var m = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+                DwmExtendFrameIntoClientArea(hwnd, ref m);
+                w.Background = Brushes.Transparent;
+                HwndSource.FromHwnd(hwnd).CompositionTarget.BackgroundColor = Colors.Transparent;
+            }
+            ApplyDwm();
+        }
+
+        void LocalizeChrome()
+        {
+            builtZh = L.Zh;
+            w.Title = L.CustomizeTitle;
+            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource };
+            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B" };
+            for (int i = 0; i < 5; i++)
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal };
+                row.Children.Add(new TextBlock { Text = glyphs[i], Style = Res<Style>("Glyph"), Margin = new Thickness(0, 0, 12, 0) });
+                row.Children.Add(new TextBlock { Text = labels[i], VerticalAlignment = VerticalAlignment.Center });
+                navs[i].Content = row;
+            }
+            if (!armed) btnReset.Content = L.ResetDefaults;
+            txtTitle.Text = PageTitle(page);
+        }
+
+        string PageTitle(int index)
+        {
+            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource }[index];
+        }
+
+        void ShowPage(int index)
+        {
+            if (switching) return;
+            switching = true;
+            page = index;
+            for (int i = 0; i < pages.Length; i++)
+            {
+                if (pages[i] != null) pages[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+                navs[i].IsChecked = i == index;
+            }
+            switching = false;
+            txtTitle.Text = PageTitle(index);
+        }
+
+        void BuildNav()
+        {
+            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource" };
+            for (int i = 0; i < 5; i++)
+            {
+                int index = i;
+                var nav = (RadioButton)w.FindName(names[i]);
+                nav.Style = Res<Style>("Nav");
+                nav.Checked += delegate { if (!loading) ShowPage(index); };
+                navs[i] = nav;
+            }
+        }
+
+        // MARK: Helpers
+
+        T Res<T>(string key) where T : class { return (T)w.FindResource(key); }
+
+        static Brush Solid(string hex) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); }
+
+        static Color ToMedia(System.Drawing.Color c) { return Color.FromArgb(c.A, c.R, c.G, c.B); }
+
+        static Brush Tint(System.Drawing.Color c) { return new SolidColorBrush(ToMedia(c)); }
+
+        static string Hex6(System.Drawing.Color c) { return string.Format("#{0:X2}{1:X2}{2:X2}", c.R, c.G, c.B); }
+
+        static System.Drawing.Color FromArgb(uint argb)
+        {
+            return System.Drawing.Color.FromArgb((int)(argb >> 24), (int)((argb >> 16) & 255), (int)((argb >> 8) & 255), (int)(argb & 255));
+        }
+
+        static BitmapSource ToSource(System.Drawing.Bitmap b, double dpi = 96)
+        {
+            var rect = new System.Drawing.Rectangle(0, 0, b.Width, b.Height);
+            var data = b.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            int stride = data.Stride;
+            byte[] px = new byte[stride * b.Height];
+            Marshal.Copy(data.Scan0, px, 0, px.Length);
+            b.UnlockBits(data);
+            var src = BitmapSource.Create(b.Width, b.Height, dpi, dpi, PixelFormats.Pbgra32, null, px, stride);
+            src.Freeze();
+            return src;
+        }
+
+        CheckBox Toggle()
+        {
+            var cb = new CheckBox { Style = Res<Style>("Toggle"), VerticalAlignment = VerticalAlignment.Center, Content = L.ToggleOff };
+            cb.Checked += delegate { cb.Content = L.ToggleOn; };
+            cb.Unchecked += delegate { cb.Content = L.ToggleOff; };
+            return cb;
+        }
+
+        // A setting row: title and hint on the left, the control on the right.
+        Grid CardGrid(string title, string hint, UIElement control)
+        {
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+            text.Children.Add(new TextBlock { Text = title, Style = Res<Style>("RowTitle") });
+            if (hint != null) text.Children.Add(new TextBlock { Text = hint, Style = Res<Style>("RowHint") });
+            g.Children.Add(text);
+            Grid.SetColumn(control, 1);
+            control.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            g.Children.Add(control);
+            return g;
+        }
+
+        Border Box(UIElement child)
+        {
+            return new Border { Style = Res<Style>("CardBorder"), Child = child };
+        }
+
+        UIElement SettingCard(string title, string hint, UIElement control)
+        {
+            return Box(CardGrid(title, hint, control));
+        }
+
+        TextBlock Header(string text)
+        {
+            return new TextBlock { Text = text, Style = Res<Style>("SectionHeader") };
+        }
+
+        StackPanel PageOf(params UIElement[] items)
+        {
+            var sp = new StackPanel();
+            foreach (UIElement e in items) sp.Children.Add(e);
+            return sp;
+        }
+
+        Border Divider()
+        {
+            var d = new Border { Height = 1, Margin = new Thickness(0, 10, 0, 10) };
+            d.SetResourceReference(Border.BackgroundProperty, "CardStroke");
+            return d;
+        }
+
+        Border SegOf(string[] labels, out RadioButton[] rbs)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            rbs = new RadioButton[labels.Length];
+            for (int i = 0; i < labels.Length; i++)
+            {
+                rbs[i] = new RadioButton { Content = labels[i], Style = Res<Style>("Seg") };
+                sp.Children.Add(rbs[i]);
+            }
+            var b = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), Padding = new Thickness(2), Child = sp };
+            b.SetResourceReference(Border.BackgroundProperty, "ControlFill");
+            b.SetResourceReference(Border.BorderBrushProperty, "ControlStroke");
+            return b;
+        }
+
+        void BindToggle(CheckBox cb, Action<bool> put)
+        {
+            cb.Checked += delegate { Edit(delegate { put(true); }); };
+            cb.Unchecked += delegate { Edit(delegate { put(false); }); };
+        }
+
+        void BindRadio(RadioButton rb, Action put)
+        {
+            rb.Checked += delegate { Edit(put); };
+        }
+
+        // Sticky ToggleButton: clicking the selected one keeps it selected.
+        void BindSticky(ToggleButton b, int pos)
+        {
+            b.Checked += delegate { Edit(delegate { set.Position = pos; }); };
+            b.Unchecked += delegate
+            {
+                if (!loading && set.Position == pos)
+                {
+                    loading = true;
+                    b.IsChecked = true;
+                    loading = false;
+                }
+            };
+        }
+
+        Slider Slide(double lo, double hi, double step, Action<int> put)
+        {
+            var s = new Slider { Minimum = lo, Maximum = hi, TickFrequency = step, IsSnapToTickEnabled = true, Width = 240, Style = Res<Style>("Sld") };
+            s.ValueChanged += delegate { int v = (int)Math.Round(s.Value); Edit(delegate { put(v); }); };
+            return s;
+        }
+
+        // MARK: Pages
+
+        void BuildPages()
+        {
+            pages[0] = BuildGeneral();
+            pages[1] = BuildAppearance();
+            pages[2] = BuildBehavior();
+            pages[3] = BuildSound();
+            pages[4] = BuildSource();
+            foreach (StackPanel p in pages) pageHost.Children.Add(p);
+        }
+
+        StackPanel BuildGeneral()
+        {
+            chkPause = Toggle();
+            chkWarn = Toggle();
+            chkStart = Toggle();
+            chkAuto = Toggle();
+            BindToggle(chkPause, v => set.Paused = v);
+            BindToggle(chkWarn, v => set.FailHint = v);
+            BindToggle(chkStart, v => Settings.AutoStart = v);
+            BindToggle(chkAuto, v => set.AutoUpdate = v);
+            RadioButton[] lang;
+            var langSeg = SegOf(new[] { L.LangSystem, "English", "中文" }, out lang);
+            rbLang = lang;
+            string[] codes = { "auto", "en", "zh" };
+            for (int i = 0; i < 3; i++) { int idx = i; BindRadio(rbLang[i], delegate { set.Lang = codes[idx]; }); }
+            return PageOf(
+                SettingCard(L.MenuPause, L.HintPause, chkPause),
+                SettingCard(L.MenuHint, L.HintWarn, chkWarn),
+                SettingCard(L.MenuStartup, L.HintStartup, chkStart),
+                SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
+                SettingCard(L.MenuLanguage, L.HintLanguage, langSeg));
+        }
+
+        StackPanel BuildAppearance()
+        {
+            RadioButton[] theme;
+            var themeSeg = SegOf(new[] { L.ThemeSystem, L.ThemeLight, L.ThemeDark }, out theme);
+            rbTheme = theme;
+            for (int i = 0; i < 3; i++) { int idx = i; BindRadio(rbTheme[i], delegate { set.ThemeMode = idx; }); }
+
+            var tileRow = new WrapPanel();
+            string[] tileNames = { L.PaletteDefault, L.PaletteGraphite, L.PaletteContrast, L.PalettePastel };
+            for (int p = 0; p < 4; p++)
+            {
+                int idx = p;
+                var b = new Button { Style = Res<Style>("PaletteTile"), Margin = new Thickness(0, 0, 10, 0), Cursor = System.Windows.Input.Cursors.Hand };
+                b.Content = PaletteTile(p, tileNames[p]);
+                b.Click += delegate { Edit(delegate { set.Palette = idx; }); };
+                tiles[p] = b;
+                tileRow.Children.Add(b);
+            }
+
+            colours[0] = MakeColour(L.OkColor, L.HintOkColor, false, () => set.OkColor, v => set.OkColor = v, t => t.Ok);
+            colours[1] = MakeColour(L.WarnColor, L.HintWarnColor, false, () => set.WarnColor, v => set.WarnColor = v, t => t.Warn);
+            colours[2] = MakeColour(L.ColorBg, null, true, () => set.BgColor, v => set.BgColor = v, t => t.Bg);
+            colours[3] = MakeColour(L.ColorBorder, null, true, () => set.BorderColor, v => set.BorderColor = v, t => t.Border);
+            colours[4] = MakeColour(L.ColorTitle, null, true, () => set.TitleColor, v => set.TitleColor = v, t => t.Title);
+            colours[5] = MakeColour(L.ColorSub, null, true, () => set.SubColor, v => set.SubColor = v, t => t.Sub);
+            colours[6] = MakeColour(L.ColorMeta, null, true, () => set.MetaColor, v => set.MetaColor = v, t => t.Meta);
+
+            chkFull = Toggle();
+            BindToggle(chkFull, v => set.FullPalette = v);
+            chevron = new Button { Style = Res<Style>("IconBtn"), HorizontalAlignment = HorizontalAlignment.Right,
+                                   VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            chevron.Content = new TextBlock { Text = "\uE70D", Style = Res<Style>("Glyph"), FontSize = 12 };
+            chevron.RenderTransformOrigin = new Point(0.5, 0.5);
+            chevron.Click += delegate { expanded = !expanded; SyncExpanded(true); };
+            var head = new StackPanel { Orientation = Orientation.Horizontal, Children = { chkFull, chevron } };
+            var header = CardGrid(L.FullColors, L.HintFullColors, head);
+            header.Background = Brushes.Transparent;
+            header.Cursor = System.Windows.Input.Cursors.Hand;
+            header.MouseLeftButtonUp += OnExpandHeader;
+            var body = new StackPanel();
+            for (int i = 2; i < 7; i++)
+            {
+                if (i > 2) body.Children.Add(Divider());
+                body.Children.Add(colours[i].Row);
+            }
+            fullBody = new StackPanel { Margin = new Thickness(0, 12, 0, 0), Children = { body } };
+            var fullCard = new StackPanel();
+            fullCard.Children.Add(header);
+            fullCard.Children.Add(fullBody);
+
+            sldSize = Slide(75, 200, 5, v => set.Scale = v);
+            lblSize = new TextBlock { Style = Res<Style>("ValueText"), Width = 56, Margin = new Thickness(10, 0, 0, 0) };
+            var sizeRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldSize, lblSize } };
+
+            fonts.Clear();
+            fonts.Add(L.FontDefault);
+            var names = new List<string>();
+            foreach (FontFamily f in Fonts.SystemFontFamilies) names.Add(f.Source);
+            names.Sort(StringComparer.CurrentCultureIgnoreCase);
+            fonts.AddRange(names);
+            cmbFont = new ComboBox { Style = Res<Style>("Cmb"), ItemsSource = fonts, ItemTemplate = FontItemTemplate() };
+            cmbFont.SelectionChanged += delegate
+            {
+                int i = cmbFont.SelectedIndex;
+                if (!loading && i >= 0) Edit(delegate { set.FontFamily = i == 0 ? null : fonts[i]; });
+            };
+
+            sldText = Slide(80, 160, 5, v => set.TextScale = v);
+            lblText = new TextBlock { Style = Res<Style>("ValueText"), Width = 56, Margin = new Thickness(10, 0, 0, 0) };
+            var textRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldText, lblText } };
+
+            return PageOf(
+                SettingCard(L.ThemeTitle, L.HintTheme, themeSeg),
+                Header(L.PaletteTitle),
+                tileRow,
+                Header(L.ColoursTitle),
+                colours[0].Row,
+                colours[1].Row,
+                Box(fullCard),
+                Header(L.SizeTitle),
+                SettingCard(L.CardSize, L.HintCardSize, sizeRow),
+                SettingCard(L.FontTitle, L.HintFont, cmbFont),
+                SettingCard(L.TextSize, L.HintTextSize, textRow));
+        }
+
+        void OnExpandHeader(object s, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var src = e.Source as DependencyObject;
+            while (src != null)
+            {
+                if (src == chkFull) return;
+                src = src is Visual ? VisualTreeHelper.GetParent(src) : LogicalTreeHelper.GetParent(src);
+            }
+            expanded = !expanded;
+            SyncExpanded(true);
+        }
+
+        void SyncExpanded() { SyncExpanded(false); }
+
+        void SyncExpanded(bool animate)
+        {
+            if (fullBody == null) return;
+            bool open = expanded;
+            Reveal(fullBody, open, animate);
+            if (!animate)
+            {
+                chevron.RenderTransform = new RotateTransform(open ? 180 : 0, 0.5, 0.5);
+                return;
+            }
+            var rot = chevron.RenderTransform as RotateTransform;
+            if (rot == null) { rot = new RotateTransform(open ? 180 : 0, 0.5, 0.5); chevron.RenderTransform = rot; }
+            rot.BeginAnimation(RotateTransform.AngleProperty, new System.Windows.Media.Animation.DoubleAnimation(open ? 180 : 0,
+                TimeSpan.FromMilliseconds(200)) { EasingFunction = new System.Windows.Media.Animation.CubicEase
+                { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } });
+        }
+
+        // Slides a section open or shut (height + fade). The target is kept in Tag so a stale
+        // completion from an interrupted animation doesn't override a newer one.
+        static void Reveal(FrameworkElement el, bool open, bool animate)
+        {
+            if (el.Tag is bool && (bool)el.Tag == open && animate) return;
+            el.Tag = open;
+            if (!animate)
+            {
+                el.BeginAnimation(FrameworkElement.HeightProperty, null);
+                el.BeginAnimation(UIElement.OpacityProperty, null);
+                el.Height = double.NaN;
+                el.Opacity = 1;
+                el.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                return;
+            }
+            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+            var span = TimeSpan.FromMilliseconds(200);
+            // Start from the current on-screen height so a click mid-animation reverses smoothly.
+            bool shown = el.Visibility == Visibility.Visible;
+            double from = shown ? el.ActualHeight : 0, fromOp = shown ? el.Opacity : 0;
+            el.BeginAnimation(FrameworkElement.HeightProperty, null);
+            el.BeginAnimation(UIElement.OpacityProperty, null);
+            el.Height = double.NaN;
+            el.Opacity = 1;
+            el.Visibility = Visibility.Visible;
+            el.UpdateLayout();
+            double to = open ? el.ActualHeight : 0;
+            var size = new System.Windows.Media.Animation.DoubleAnimation(from, to, span)
+                { EasingFunction = ease, FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop };
+            var fade = new System.Windows.Media.Animation.DoubleAnimation(fromOp, open ? 1 : 0, span)
+                { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop };
+            size.Completed += delegate
+            {
+                if (!(el.Tag is bool) || (bool)el.Tag != open) return;
+                el.Height = double.NaN;
+                el.Opacity = 1;
+                el.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            };
+            // Final values stay as local values so nothing flashes when the animations release.
+            if (!open) { el.Height = 0; el.Opacity = 0; }
+            el.BeginAnimation(FrameworkElement.HeightProperty, size);
+            el.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
+
+        // A font name rendered in its own face.
+        DataTemplate FontItemTemplate()
+        {
+            var tb = new FrameworkElementFactory(typeof(TextBlock));
+            tb.SetBinding(TextBlock.TextProperty, new Binding("."));
+            tb.SetBinding(TextBlock.FontFamilyProperty, new Binding("."));
+            tb.SetValue(TextBlock.FontSizeProperty, 14.0);
+            var template = new DataTemplate { VisualTree = tb };
+            template.Seal();
+            return template;
+        }
+
+        UIElement PaletteTile(int p, string name)
+        {
+            var t = Theme.Resolve(new Settings { Palette = p, ThemeMode = dark ? 2 : 1 }, false);
+            var mini = new Border { Width = 96, Height = 60, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1),
+                                    Background = Tint(t.Bg), BorderBrush = Tint(t.Border) };
+            var g = new Canvas { Width = 94, Height = 58 };
+            var dot = new Ellipse { Width = 12, Height = 12, Fill = Tint(t.Ok) };
+            var bar1 = new Rectangle { Width = 46, Height = 5, RadiusX = 2, RadiusY = 2, Fill = Tint(t.Title) };
+            var bar2 = new Rectangle { Width = 60, Height = 4, RadiusX = 2, RadiusY = 2, Fill = Tint(t.Sub) };
+            g.Children.Add(dot); Canvas.SetLeft(dot, 8); Canvas.SetTop(dot, 8);
+            g.Children.Add(bar1); Canvas.SetLeft(bar1, 26); Canvas.SetTop(bar1, 10);
+            g.Children.Add(bar2); Canvas.SetLeft(bar2, 26); Canvas.SetTop(bar2, 22);
+            mini.Child = g;
+            var caption = new TextBlock { Text = name, HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12,
+                                          Margin = new Thickness(0, 6, 0, 0), Style = Res<Style>("ValueText") };
+            caption.VerticalAlignment = VerticalAlignment.Top;
+            return new StackPanel { Children = { mini, caption } };
+        }
+
+        Colour MakeColour(string title, string hint, bool full, Func<string> get, Action<string> put, Func<Theme, System.Drawing.Color> pick)
+        {
+            var c = new Colour { Get = get, Put = put, Pick = pick, Full = full };
+            c.Hex = new TextBlock { Style = Res<Style>("ValueText"), Margin = new Thickness(0, 0, 10, 0) };
+            c.Swatch = new Button { Style = Res<Style>("Swatch"), Cursor = System.Windows.Input.Cursors.Hand };
+            c.Swatch.Click += delegate { OpenPopup(c); };
+            c.Reset = new Button { Style = Res<Style>("Link"), Content = L.ResetColor, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            c.Reset.Click += delegate { Edit(delegate { put(null); }); };
+            var inline = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { c.Hex, c.Swatch, c.Reset } };
+            c.Inline = inline;
+            c.Row = full ? (UIElement)CardGrid(title, null, inline) : SettingCard(title, hint, inline);
+            return c;
+        }
+
+        // MARK: Colour popup
+
+        void OpenPopup(Colour c)
+        {
+            if (popColour == null) BuildPopup();
+            popFor = c;
+            popColour.PlacementTarget = c.Swatch;
+            System.Drawing.Color shown;
+            string v = c.Get();
+            System.Drawing.Color parsed;
+            shown = Theme.TryColor(v, out parsed) ? parsed : c.Pick(Theme.Resolve(set, !Theme.SystemLight()));
+            popLoading = true;
+            txtHex.Text = Hex6(shown);
+            popLoading = false;
+            hexHint.Visibility = Visibility.Collapsed;
+            foreach (Button b in presetButtons)
+            {
+                uint p = (uint)b.Tag;
+                bool same = (p & 0x00FFFFFF) == (uint)((shown.R << 16) | (shown.G << 8) | shown.B);
+                b.BorderBrush = same ? Res<Brush>("Accent") : Brushes.Transparent;
+            }
+            popBody.Background = Res<Brush>("Surface");
+            popColour.IsOpen = true;
+        }
+
+        void BuildPopup()
+        {
+            var grid = new UniformGrid { Rows = 3, Columns = 6 };
+            foreach (uint argb in Presets)
+            {
+                uint preset = argb;
+                var b = new Button { Width = 28, Height = 28, Margin = new Thickness(3), Style = Res<Style>("PresetBtn"),
+                                     Background = Tint(FromArgb(preset)), BorderBrush = Brushes.Transparent, Tag = preset };
+                b.Click += delegate { CloseAndEdit(delegate { popFor.Put(Theme.Hex(FromArgb(preset))); }); };
+                grid.Children.Add(b);
+                presetButtons.Add(b);
+            }
+            txtHex = new TextBox { Style = Res<Style>("Tb"), Width = 150, MaxLength = 7 };
+            hexHint = new TextBlock { Text = "#RRGGBB", Style = Res<Style>("ValueText"), IsHitTestVisible = false,
+                                      Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var field = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+            field.Children.Add(txtHex);
+            field.Children.Add(hexHint);
+            txtHex.TextChanged += delegate
+            {
+                hexHint.Visibility = txtHex.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+                if (!popLoading) LiveApply();
+            };
+            txtHex.KeyDown += delegate(object s, System.Windows.Input.KeyEventArgs e)
+            {
+                if (e.Key != System.Windows.Input.Key.Enter) return;
+                LiveApply();
+                popColour.IsOpen = false;
+            };
+            var reset = new Button { Style = Res<Style>("Link"), Content = L.ResetColor, Margin = new Thickness(0, 10, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+            reset.Click += delegate { CloseAndEdit(delegate { popFor.Put(null); }); };
+            var sp = new StackPanel();
+            sp.Children.Add(grid);
+            sp.Children.Add(field);
+            sp.Children.Add(reset);
+            popBody = new Border { Padding = new Thickness(14), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+                                   BorderBrush = Solid(dark ? "#22FFFFFF" : "#14000000"), Child = sp,
+                                   Effect = new DropShadowEffect { BlurRadius = 16, ShadowDepth = 4, Opacity = 0.35 } };
+            popColour = new Popup { Child = popBody, StaysOpen = false, Placement = PlacementMode.Bottom, AllowsTransparency = true,
+                                    PopupAnimation = PopupAnimation.Fade };
+        }
+
+        static string Normalize(string text)
+        {
+            if (text == null) return null;
+            string s = text.Trim();
+            if (s.StartsWith("#")) s = s.Substring(1);
+            if (s.Length == 6) s = "FF" + s;
+            if (s.Length != 8) return null;
+            return "#" + s.ToUpperInvariant();
+        }
+
+        // Applies as soon as the text is a valid colour.
+        void LiveApply()
+        {
+            if (popFor == null) return;
+            string s = Normalize(txtHex.Text);
+            System.Drawing.Color c;
+            if (s == null || !Theme.TryColor(s, out c)) return;
+            Colour target = popFor;
+            Edit(delegate { target.Put(Theme.Hex(c)); });
+        }
+
+        void CloseAndEdit(Action a)
+        {
+            popColour.IsOpen = false;
+            Edit(a);
+        }
+
+        // MARK: Behavior
+
+        StackPanel BuildBehavior()
+        {
+            monitorEl = new Border
+            {
+                Width = 240, Height = 140, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(10),
+                HorizontalAlignment = HorizontalAlignment.Center, Cursor = System.Windows.Input.Cursors.Hand,
+            };
+            monitorEl.SetResourceReference(Border.BackgroundProperty, "CardSurface");
+            monitorEl.SetResourceReference(Border.BorderBrushProperty, "ControlStroke");
+            spotsPanel = new Grid();
+            for (int i = 0; i < 3; i++)
+            {
+                spotsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                spotsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            }
+            for (int i = 0; i < 9; i++)
+            {
+                int pos = i;
+                var s = new ToggleButton { Style = Res<Style>("Spot"), Margin = new Thickness(4) };
+                Grid.SetRow(s, i / 3);
+                Grid.SetColumn(s, i % 3);
+                spotsPanel.Children.Add(s);
+                spots[i] = s;
+                BindSticky(s, pos);
+            }
+            // In Freedom mode the spots fade and a mini card (proportional to the real one) is dragged instead.
+            overlay = new Canvas { Visibility = Visibility.Collapsed };
+            miniCard = new Border { CornerRadius = new CornerRadius(3) };
+            miniCard.SetResourceReference(Border.BackgroundProperty, "Accent");
+            overlay.Children.Add(miniCard);
+            var monitorFill = new Grid { Children = { spotsPanel, overlay } };
+            monitorEl.Child = monitorFill;
+            monitorEl.MouseLeftButtonDown += MonitorDown;
+            monitorEl.MouseMove += MonitorMove;
+            monitorEl.MouseLeftButtonUp += MonitorUp;
+            var neck = new Border { Width = 16, Height = 10, HorizontalAlignment = HorizontalAlignment.Center };
+            neck.SetResourceReference(Border.BackgroundProperty, "ControlFill");
+            var foot = new Border { Width = 60, Height = 5, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Center };
+            foot.SetResourceReference(Border.BackgroundProperty, "ControlFill");
+            var monitorBlock = new StackPanel { Children = { monitorEl, neck, foot } };
+
+            chipNear = new ToggleButton { Style = Res<Style>("Chip"), Content = L.PosNear, Margin = new Thickness(0, 0, 8, 0) };
+            chipFree = new ToggleButton { Style = Res<Style>("Chip"), Content = L.PosFree };
+            BindSticky(chipNear, 9);
+            BindSticky(chipFree, 10);
+            var chips = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center,
+                                         Margin = new Thickness(0, 12, 0, 0), Children = { chipNear, chipFree } };
+            hintFree = new TextBlock { Text = L.HintFree, Style = Res<Style>("RowHint"), HorizontalAlignment = HorizontalAlignment.Center,
+                                       Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+            var positionBody = new StackPanel { Children = { monitorBlock, chips, hintFree } };
+
+            sldDur = Slide(500, 10000, 500, v => set.DurationMs = v);
+            lblDur = new TextBlock { Style = Res<Style>("ValueText"), Width = 60, Margin = new Thickness(10, 0, 0, 0) };
+            var durRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldDur, lblDur } };
+            chkStay = Toggle();
+            BindToggle(chkStay, v => set.StayUntilClicked = v);
+
+            return PageOf(
+                Header(L.PositionTitle),
+                new TextBlock { Text = L.HintPosition, Style = Res<Style>("RowHint"), Margin = new Thickness(0, 0, 0, 8) },
+                Box(positionBody),
+                SettingCard(L.DurationTitle, L.HintDuration, durRow),
+                SettingCard(L.StayUntilClicked, L.HintStay, chkStay));
+        }
+
+        void SyncFree()
+        {
+            if (monitorEl == null) return;
+            bool free = set.Position == 10;
+            spotsPanel.IsHitTestVisible = !free;
+            spotsPanel.Opacity = free ? 0.25 : 1;
+            overlay.Visibility = free ? Visibility.Visible : Visibility.Collapsed;
+            hintFree.Visibility = free ? Visibility.Visible : Visibility.Collapsed;
+            if (free) w.Dispatcher.BeginInvoke(new Action(PlaceMini), DispatcherPriority.Loaded);
+        }
+
+        // The mini card is the real card shrunk into the monitor's inner area by the primary-work-area ratio.
+        void PlaceMini()
+        {
+            double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
+            if (iw <= 0 || ih <= 0) return;
+            Size mini = MiniSize(iw, ih);
+            miniCard.Width = mini.Width;
+            miniCard.Height = mini.Height;
+            Canvas.SetLeft(miniCard, set.FreeX / 1000.0 * (iw - mini.Width));
+            Canvas.SetTop(miniCard, set.FreeY / 1000.0 * (ih - mini.Height));
+        }
+
+        Size MiniSize(double iw, double ih)
+        {
+            var wa = SystemParameters.WorkArea;
+            double k = set.Scale / 100.0;
+            double mw = Math.Max(28, Math.Min(iw, card.W * k / wa.Width * iw));
+            double mh = Math.Max(8, Math.Min(ih, card.H * k / wa.Height * ih));
+            return new Size(mw, mh);
+        }
+
+        void MonitorDown(object s, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (set.Position != 10) return;
+            Point p = e.GetPosition(overlay);
+            if (e.Source == miniCard)
+            {
+                miniOffX = p.X - Canvas.GetLeft(miniCard);
+                miniOffY = p.Y - Canvas.GetTop(miniCard);
+            }
+            else
+            {
+                miniOffX = miniCard.Width / 2;
+                miniOffY = miniCard.Height / 2;
+                MoveMini(p);
+            }
+            miniDrag = true;
+            monitorEl.CaptureMouse();
+            e.Handled = true;
+        }
+
+        void MoveMini(Point p)
+        {
+            double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
+            Canvas.SetLeft(miniCard, Math.Max(0, Math.Min(iw - miniCard.Width, p.X - miniOffX)));
+            Canvas.SetTop(miniCard, Math.Max(0, Math.Min(ih - miniCard.Height, p.Y - miniOffY)));
+        }
+
+        void MonitorMove(object s, System.Windows.Input.MouseEventArgs e)
+        {
+            if (miniDrag) MoveMini(e.GetPosition(overlay));
+        }
+
+        void MonitorUp(object s, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (!miniDrag) return;
+            miniDrag = false;
+            monitorEl.ReleaseMouseCapture();
+            double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
+            int fx = (int)Math.Round(Canvas.GetLeft(miniCard) * 1000 / Math.Max(1, iw - miniCard.Width));
+            int fy = (int)Math.Round(Canvas.GetTop(miniCard) * 1000 / Math.Max(1, ih - miniCard.Height));
+            fx = Math.Max(0, Math.Min(1000, fx));
+            fy = Math.Max(0, Math.Min(1000, fy));
+            Edit(delegate { set.FreeX = fx; set.FreeY = fy; });
+        }
+
+        // MARK: Sound
+
+        StackPanel BuildSound()
+        {
+            chkSound = Toggle();
+            BindToggle(chkSound, v => set.Sound = v);
+            soundOk = MakeSound(L.CopiedSound, true, () => set.SoundOkFile, v => set.SoundOkFile = v);
+            soundFail = MakeSound(L.FailSound, false, () => set.SoundFailFile, v => set.SoundFailFile = v);
+            return PageOf(
+                SettingCard(L.PlaySounds, L.HintSound, chkSound),
+                SoundCard(soundOk),
+                SoundCard(soundFail));
+        }
+
+        Sound MakeSound(string title, bool ok, Func<string> get, Action<string> put)
+        {
+            var s = new Sound { Title = title, Get = get, Put = put, Ok = ok };
+            s.Hint = new TextBlock { Style = Res<Style>("RowHint") };
+            RadioButton[] rbs;
+            s.Seg = SegOf(new[] { L.SoundBuiltIn, L.SoundCustom }, out rbs);
+            s.BuiltIn = rbs[0];
+            s.Custom = rbs[1];
+            BindRadio(s.BuiltIn, delegate { put(null); });
+            s.Custom.Checked += delegate { if (!loading && get() == null) Browse(s); };
+            s.Browse = new Button { Style = Res<Style>("Subtle"), Content = L.Browse, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            s.Browse.Click += delegate { Browse(s); };
+            s.Play = new Button { Style = Res<Style>("RoundIcon"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            s.Play.Content = new TextBlock { Text = "\uE768", Style = Res<Style>("Glyph"), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center };
+            s.Play.Click += delegate { test(ok); };
+            return s;
+        }
+
+        UIElement SoundCard(Sound s)
+        {
+            var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+            left.Children.Add(new TextBlock { Text = s.Title, Style = Res<Style>("RowTitle") });
+            left.Children.Add(s.Hint);
+            var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
+                                         Children = { s.Seg, s.Browse, s.Play } };
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.Children.Add(left);
+            Grid.SetColumn(right, 1);
+            g.Children.Add(right);
+            return Box(g);
+        }
+
+        void ShowSound(Sound s)
+        {
+            string path = s.Get();
+            s.BuiltIn.IsChecked = path == null;
+            s.Custom.IsChecked = path != null;
+            bool custom = s.Custom.IsChecked == true;
+            s.Hint.Text = !custom ? L.SoundBuiltInHint : path == null ? L.SoundNoFile : System.IO.Path.GetFileName(path);
+            s.Hint.ToolTip = custom ? path : null;
+            s.Browse.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void Browse(Sound s)
+        {
+            var dlg = new OpenFileDialog { Filter = L.AudioFilter };
+            if (dlg.ShowDialog(w) == true)
+            {
+                string file = dlg.FileName;
+                Edit(delegate { s.Put(file); });
+            }
+        }
+
+        // MARK: Source
+
+        StackPanel BuildSource()
+        {
+            chkSource = Toggle();
+            BindToggle(chkSource, v => set.ShowSource = v);
+            RadioButton[] when;
+            var whenSeg = SegOf(new[] { L.SourceAlways, L.SourceAuto }, out when);
+            rbWhen = when;
+            BindRadio(rbWhen[0], delegate { set.SourceWhen = 0; });
+            BindRadio(rbWhen[1], delegate { set.SourceWhen = 1; });
+            whenPanel = Box(CardGrid(L.SourceWhen, L.HintWhen, whenSeg));
+
+            var list = new StackPanel();
+            string[] names = { L.DetailIcon, L.DetailApp, L.DetailSite, L.DetailTitle };
+            string[] hints = { L.HintDetailIcon, L.HintDetailApp, L.HintDetailSite, L.HintDetailTitle };
+            for (int i = 0; i < 4; i++)
+            {
+                int d = i;
+                var content = new StackPanel();
+                content.Children.Add(new TextBlock { Text = names[i], Style = Res<Style>("RowTitle") });
+                content.Children.Add(new TextBlock { Text = hints[i], Style = Res<Style>("RowHint") });
+                rbDetail[i] = new RadioButton { Style = Res<Style>("Radio"), Content = content };
+                BindRadio(rbDetail[i], delegate { set.SourceDetail = d; });
+                list.Children.Add(rbDetail[i]);
+                if (i < 3) list.Children.Add(Divider());
+            }
+            detailPanel = Box(list);
+            // Everything below the switch only matters while it's on, so it folds away instead of greying out.
+            sourceBody = PageOf(whenPanel, Header(L.SourceDetail), detailPanel);
+            return PageOf(SettingCard(L.MenuSource, L.HintSource, chkSource), sourceBody);
+        }
+
+        // MARK: Reset (two steps)
+
+        void OnReset()
+        {
+            if (!armed)
+            {
+                armed = true;
+                btnReset.Content = L.ResetArmed;
+                armTimer.Start();
+                return;
+            }
+            armTimer.Stop();
+            armed = false;
+            btnReset.Content = L.ResetDefaults;
+            Edit(delegate { set.ResetDisplay(); });
+        }
+
+        // Test hooks: the harness reads the window content and drives controls through these.
+        public FrameworkElement Root { get { return (FrameworkElement)w.Content; } }
+        public string TitleText { get { return txtTitle.Text; } }
+        public string HexText { get { return txtHex == null ? null : txtHex.Text; } }
+        public bool PopupOpen { get { return popColour != null && popColour.IsOpen; } }
+        public Popup ColourPopup { get { return popColour; } }
+        public void OpenColourPopup(int index) { OpenPopup(colours[index]); }
+        public void OpenFontDropdown() { cmbFont.IsDropDownOpen = true; }
+        public void TypeHex(string text) { txtHex.Text = text; }
+        public void SelectPage(int index) { ShowPage(index); }
+        public void PressPreset(int i) { presetButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
+        public void ScrollToBottom() { pageScroll.ScrollToVerticalOffset(pageScroll.ScrollableHeight); }
+        public void PressReset() { btnReset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
+        public void Close() { w.Close(); }
+
+        // Device-pixel rectangle of the window on screen, for the on-screen capture.
+        public System.Drawing.Rectangle ScreenRect()
+        {
+            double scale = PresentationSource.FromVisual(w).CompositionTarget.TransformToDevice.M11;
+            return new System.Drawing.Rectangle((int)(w.Left * scale), (int)(w.Top * scale),
+                                                (int)(w.ActualWidth * scale), (int)(w.ActualHeight * scale));
+        }
+
+        public object Get(string key)
+        {
+            if (key != null && key.Length == 5 && key.StartsWith("spot", StringComparison.Ordinal))
+            {
+                int n = key[4] - '0';
+                if (n >= 0 && n < 9) return spots[n];
+            }
+            switch (key)
+            {
+                case "pause": return chkPause;
+                case "warn": return chkWarn;
+                case "auto": return chkAuto;
+                case "sound": return chkSound;
+                case "source": return chkSource;
+                case "stay": return chkStay;
+                case "full": return chkFull;
+                case "size": return sldSize;
+                case "text": return sldText;
+                case "duration": return sldDur;
+                case "theme1": return rbTheme[1];
+                case "lang2": return rbLang[2];
+                case "when1": return rbWhen[1];
+                case "detail2": return rbDetail[2];
+                case "near": return chipNear;
+                case "free": return chipFree;
+            }
+            return null;
+        }
+    }
+}

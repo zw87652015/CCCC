@@ -60,6 +60,7 @@ namespace Cccc
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }
         public static string MenuSound { get { return T("Sound", "提示音"); } }
+        public static string MenuStopSounds { get { return T("Stop all sounds", "停止所有声音"); } }
         public static string MenuHint { get { return T("Warn when nothing was copied", "没复制上时提醒我"); } }
         public static string MenuStartup { get { return T("Start with Windows", "开机启动"); } }
         public static string MenuLanguage { get { return T("Language", "语言"); } }
@@ -86,6 +87,94 @@ namespace Cccc
         }
         public static string UpdatedTitle(string ver) { return T("Updated to " + ver, "已更新到 " + ver); }
         public static string UpdatedSub { get { return T("Thanks for keeping CCCC fresh.", "CCCC 已是最新。"); } }
+
+        public static string MenuSource { get { return T("Show source", "显示来源"); } }
+        public static string MenuSourceOn { get { return T("On", "开启"); } }
+        public static string SourceWhen { get { return T("When", "何时显示"); } }
+        public static string SourceAlways { get { return T("Always", "总是显示"); } }
+        public static string SourceAuto { get { return T("Only when not obvious", "仅在不明显时"); } }
+        public static string SourceDetail { get { return T("Detail", "详细程度"); } }
+        public static string DetailIcon { get { return T("App icon only", "仅应用图标"); } }
+        public static string DetailApp { get { return T("App name", "应用名称"); } }
+        public static string DetailSite { get { return T("App + website", "应用 + 网站"); } }
+        public static string DetailTitle { get { return T("App + website + page/window title", "应用 + 网站 + 页面/窗口标题"); } }
+        public static string RemoteDesktop { get { return T("Remote Desktop", "远程桌面"); } }
+
+        public static string MenuCustomize { get { return T("Customize…", "自定义…"); } }
+        public static string CustomizeTitle { get { return T("Customize CCCC", "自定义 CCCC"); } }
+        public static string TabGeneral { get { return T("General", "常规"); } }
+        public static string TabAppearance { get { return T("Appearance", "外观"); } }
+        public static string TabBehavior { get { return T("Behavior", "行为"); } }
+        public static string TabSound { get { return T("Sound", "声音"); } }
+        public static string TabSource { get { return T("Source", "来源"); } }
+
+        public static string ResetDefaults { get { return T("Reset to defaults", "恢复默认"); } }
+        public static string ThemeTitle { get { return T("Theme", "主题"); } }
+        public static string ThemeSystem { get { return T("System", "跟随系统"); } }
+        public static string ThemeLight { get { return T("Light", "浅色"); } }
+        public static string ThemeDark { get { return T("Dark", "深色"); } }
+        public static string PaletteTitle { get { return T("Palette", "配色"); } }
+        public static string PaletteDefault { get { return T("Default", "默认"); } }
+        public static string PaletteGraphite { get { return T("Graphite", "石墨"); } }
+        public static string PaletteContrast { get { return T("High contrast", "高对比"); } }
+        public static string PalettePastel { get { return T("Pastel", "柔和"); } }
+        public static string OkColor { get { return T("Success colour", "成功颜色"); } }
+        public static string WarnColor { get { return T("Warning colour", "警告颜色"); } }
+        public static string ResetColor { get { return T("Reset", "重置"); } }
+        public static string FullColors { get { return T("Customize all colours", "自定义全部颜色"); } }
+        public static string ColorBg { get { return T("Background", "背景"); } }
+        public static string ColorBorder { get { return T("Border", "边框"); } }
+        public static string ColorTitle { get { return T("Title text", "标题文字"); } }
+        public static string ColorSub { get { return T("Body text", "正文文字"); } }
+        public static string ColorMeta { get { return T("Details text", "细节文字"); } }
+        public static string CardSize { get { return T("Card size", "卡片大小"); } }
+        public static string FontTitle { get { return T("Font", "字体"); } }
+        public static string FontDefault { get { return T("Default", "默认"); } }
+        public static string TextSize { get { return T("Text size", "文字大小"); } }
+        public static string PositionTitle { get { return T("Position", "位置"); } }
+        public static string PosNear { get { return T("Near the mouse pointer", "鼠标附近"); } }
+        public static string PosFree { get { return T("Freedom", "自由"); } }
+        public static string HintFree { get { return T("Drag the card in the preview, or drag the card itself on screen", "拖动预览中的卡片，或直接拖动屏幕上的卡片"); } }
+        public static string DurationTitle { get { return T("Show for", "停留时间"); } }
+        public static string StayUntilClicked { get { return T("Stay until clicked", "直到点击才关闭"); } }
+        public static string PlaySounds { get { return T("Play sounds", "播放提示音"); } }
+        public static string CopiedSound { get { return T("Copied sound", "复制成功音"); } }
+        public static string FailSound { get { return T("Nothing copied sound", "未复制成功音"); } }
+        public static string SoundBuiltIn { get { return T("Built-in", "内置"); } }
+        public static string SoundCustom { get { return T("Custom file", "自定义文件"); } }
+        public static string Browse { get { return T("Browse…", "浏览…"); } }
+        public static string Test { get { return T("Test", "试听"); } }
+        public static string LangSystem { get { return T("System", "跟随系统"); } }
+        public static string AudioFilter { get { return "Audio (*.wav;*.mp3)|*.wav;*.mp3"; } }
+        public static string ResetArmed { get { return T("Click again to reset", "再点一次以重置"); } }
+        public static string ToggleOn { get { return T("On", "开"); } }
+        public static string ToggleOff { get { return T("Off", "关"); } }
+        public static string SoundBuiltInHint { get { return T("Built-in sound", "内置提示音"); } }
+        public static string SoundNoFile { get { return T("No file chosen", "未选择文件"); } }
+        public static string ColoursTitle { get { return T("Colours", "颜色"); } }
+        public static string SizeTitle { get { return T("Size", "大小"); } }
+        public static string HintPause { get { return T("Stop noticing copies for now", "暂时不监听复制"); } }
+        public static string HintWarn { get { return T("Warn when Ctrl+C copies nothing", "Ctrl+C 没复制上时提醒"); } }
+        public static string HintStartup { get { return T("Run CCCC when you sign in", "登录 Windows 时自动运行"); } }
+        public static string HintAutoUpdate { get { return T("Check GitHub for new releases", "在 GitHub 上检查新版本"); } }
+        public static string HintLanguage { get { return T("Follow Windows, or pick a language", "跟随系统，或选择语言"); } }
+        public static string HintTheme { get { return T("Follow Windows, or pick light or dark", "跟随系统，或选择浅色或深色"); } }
+        public static string HintOkColor { get { return T("The colour of a successful copy", "复制成功时的颜色"); } }
+        public static string HintWarnColor { get { return T("The colour of a failed copy", "未复制成功时的颜色"); } }
+        public static string HintFullColors { get { return T("Override the card's background, borders and text", "自定义卡片的背景、边框和文字"); } }
+        public static string HintCardSize { get { return T("Scale the whole card", "整体缩放卡片"); } }
+        public static string HintFont { get { return T("Font for the text on the card", "卡片文字使用的字体"); } }
+        public static string HintTextSize { get { return T("Scale only the text", "只缩放文字"); } }
+        public static string HintPosition { get { return T("Where the card appears on screen", "卡片在屏幕上出现的位置"); } }
+        public static string HintDuration { get { return T("How long the card stays", "卡片停留的时间"); } }
+        public static string HintStay { get { return T("Keep the card until you click it", "卡片一直显示，直到点击"); } }
+        public static string HintSound { get { return T("A short sound for copies and misses", "复制成功或失败时播放短音"); } }
+        public static string HintSource { get { return T("Show which app the copy came from", "显示复制内容来自哪个应用"); } }
+        public static string HintWhen { get { return T("When to show the source", "何时显示来源"); } }
+        public static string HintDetailIcon { get { return T("App icon only", "只显示应用图标"); } }
+        public static string HintDetailApp { get { return T("e.g. Google Chrome", "例如 Google Chrome"); } }
+        public static string HintDetailSite { get { return T("e.g. Google Chrome · github.com", "例如 Google Chrome · github.com"); } }
+        public static string HintDetailTitle { get { return T("Also the page or window title", "还包括页面或窗口标题"); } }
 
         public static string Tip { get { return T("CCCC · copy with confidence", "CCCC · 放心复制"); } }
         public static string TipPaused { get { return T("CCCC · paused", "CCCC · 已暂停"); } }

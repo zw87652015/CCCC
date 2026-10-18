@@ -4,7 +4,8 @@ import AppKit
 enum Sheet {
     static func render(_ path: String) {
         L.apply(nil)
-        let cw = Card.canvasW, ch = Card.canvasH
+        let card = Card(defaults: true)
+        let cw = card.canvasW, ch = card.canvasH
         let rows = rowSpecs()
         let iconRow: CGFloat = 80
         let width = cw * 2, height = ch * CGFloat(rows.count) + iconRow
@@ -21,7 +22,7 @@ enum Sheet {
         fill(ctx, CGRect(x: 0, y: 0, width: cw, height: height), top: rgba(28, 34, 52), bottom: rgba(52, 40, 64))
         fill(ctx, CGRect(x: cw, y: 0, width: cw, height: height), top: rgba(206, 218, 236), bottom: rgba(232, 220, 226))
 
-        let card = Card()
+
         for (col, theme) in [Theme.darkTheme, Theme.lightTheme].enumerated() {
             card.th = theme
             for (row, spec) in rows.enumerated() {
@@ -71,6 +72,13 @@ enum Sheet {
         let again = L.again
         let image = Content(kind: .copied, title: again[0], meta: L.image, sub: "1920 × 1080")
         image.thumb = thumb
+        let appIcon = Icons.app(32)
+        func sourced(_ c: Content, _ text: String, line: Bool = false) -> Content {
+            c.srcIcon = appIcon
+            c.srcText = text
+            c.srcLine = line
+            return c
+        }
         return [
             (Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text), false, 1.2),
             (Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text), false, 0.17),
@@ -80,6 +88,11 @@ enum Sheet {
             (Content(kind: .cut, title: L.cut, meta: L.items(3), sub: "report.pdf, photo.png, 笔记.txt"), false, 1.2),
             (Content(kind: .fail, title: L.nothingCopied, sub: L.stillHolding + text, count: 2), true, 1.2),
             (Content(kind: .info, title: L.readyTitle, sub: L.readySub), false, 1.2),
+            (sourced(Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text), "Google Chrome · github.com", line: true), false, 1.2),
+            (sourced(Content(kind: .copied, title: again[0], meta: L.link, sub: "github.com/microsoft/terminal/issues/1234"), ""), false, 1.2),
+            (sourced(Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text),
+                     "Visual Studio Code · github.com · Pull request #1234: Add customizable source display", line: true), false, 1.2),
+            (sourced(Content(kind: .fail, title: L.nothingCopied, sub: L.stillHolding + text), "Microsoft Word"), false, 1.2),
         ]
     }
 }

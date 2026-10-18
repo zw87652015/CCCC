@@ -46,18 +46,21 @@ private let keyTapCallback: CGEventTapCallBack = { _, type, event, refcon in
     return Unmanaged.passUnretained(event)
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updated: Bool
     private let card = Card()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private let trayIcon = Icons.trayTemplate()
-    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miHint: NSMenuItem!
+    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miStopSounds: NSMenuItem!, miHint: NSMenuItem!
+    private var miSource: NSMenuItem!, miSourceOn: NSMenuItem!, miWhen: NSMenuItem!, miWhenAlways: NSMenuItem!
+    private var miWhenAuto: NSMenuItem!, miDetail: NSMenuItem!, miDetails: [NSMenuItem] = []
     private var miInput: NSMenuItem!, miStartup: NSMenuItem!, miAutoUpdate: NSMenuItem!
     private var miLang: NSMenuItem!, miLangEn: NSMenuItem!, miLangZh: NSMenuItem!
-    private var miUpdate: NSMenuItem!, miQuit: NSMenuItem!
+    private var miCustomize: NSMenuItem!, miUpdate: NSMenuItem!, miQuit: NSMenuItem!
 
-    private var sounds: Sounds?
+    private let sounds = Sounds()
+    private var customize: Customize?
     private(set) var tap: CFMachPort?
     private var tapRetry: Timer?
     private var clipTimer: Timer?
@@ -71,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyTick = 0.0
     private var keySeq = -1
     private var lastSeq = -1, polled = -1
-    private var changeApp: String?
+    private var changeFront: NSRunningApplication?
+    private var lastSrc: Source?, lastSecret = false, srcSeq = -1
     private var checking = false
     private var declinedTag: String?
 
@@ -88,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let silent = launchedAsLogin || ProcessInfo.processInfo.systemUptime < 180
 
         L.apply(Prefs.lang == "auto" ? nil : Prefs.lang)
+        sounds.load(okFile: Prefs.soundOkFile, failFile: Prefs.soundFailFile)
         buildMenu()
         statusItem.button?.image = trayIcon
         statusItem.button?.target = self
@@ -111,6 +116,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let now = ClipReader.read(app: nil) {
             lastSig = now.sig
             lastHold = now.hold
+            lastSrc = Sources.detect(front: NSWorkspace.shared.frontmostApplication, atCopy: false, sourceBundle: now.sourceBundle,
+                                     remote: now.remote, site: now.site, wantTitle: Prefs.sourceDetail >= 3)
+            lastSecret = now.secret
+            srcSeq = lastSeq
         }
 
         let ct = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in self?.pollClipboard() }
@@ -142,7 +151,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         miShow = item(#selector(showClipboardAction))
         miPause = item(#selector(togglePause))
         miSound = item(#selector(toggleSound))
+        miStopSounds = item(#selector(stopSoundsAction))
+        miStopSounds.isEnabled = false
         miHint = item(#selector(toggleHint))
+        miSourceOn = item(#selector(toggleSource))
+        miWhen = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        miWhen.isEnabled = false
+        miWhenAlways = item(#selector(pickWhen(_:)))
+        miWhenAlways.tag = 0
+        miWhenAuto = item(#selector(pickWhen(_:)))
+        miWhenAuto.tag = 1
+        miDetail = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        miDetail.isEnabled = false
+        miDetails = (0..<4).map { level -> NSMenuItem in
+            let i = item(#selector(pickDetail(_:)))
+            i.tag = level
+            return i
+        }
+        let sourceMenu = NSMenu()
+        let sourceItems: [NSMenuItem?] = [miSourceOn, nil, miWhen, miWhenAlways, miWhenAuto, nil, miDetail] + miDetails.map { Optional($0) }
+        for entry in sourceItems {
+            sourceMenu.addItem(entry ?? .separator())
+        }
+        miSource = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        miSource.submenu = sourceMenu
         miInput = item(#selector(requestInputAction))
         miStartup = item(#selector(toggleStartup))
         miAutoUpdate = item(#selector(toggleAutoUpdate))
@@ -155,12 +187,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         langMenu.addItem(miLangZh)
         miLang = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         miLang.submenu = langMenu
+        miCustomize = NSMenuItem(title: "", action: #selector(openCustomize), keyEquivalent: ",")
+        miCustomize.target = self
         miUpdate = item(#selector(checkUpdateAction))
         miQuit = item(#selector(quitAction))
 
-        for entry in [miShow, nil, miPause, miSound, miHint, miInput, miStartup, miAutoUpdate, miLang, nil, miUpdate, nil, miQuit] {
+        for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
             menu.addItem(entry ?? .separator())
         }
+        menu.delegate = self
+    }
+
+    // The stop-all item is only meaningful while cues are playing.
+    func menuWillOpen(_ menu: NSMenu) {
+        miStopSounds.isEnabled = sounds.playing
     }
 
     private func item(_ action: Selector) -> NSMenuItem {
@@ -171,27 +211,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func sync() {
         L.apply(Prefs.lang == "auto" ? nil : Prefs.lang)
+        card.apply()
+        customize?.reload()
         miShow.title = L.menuShow
         miPause.title = L.menuPause
         miSound.title = L.menuSound
+        miStopSounds.title = L.menuStopSounds
         miHint.title = L.menuHint
+        miSource.title = L.menuSource
+        miSourceOn.title = L.menuSourceOn
+        miWhen.title = L.sourceWhen
+        miWhenAlways.title = L.sourceAlways
+        miWhenAuto.title = L.sourceAuto
+        miDetail.title = L.sourceDetail
+        for (i, title) in [L.detailIcon, L.detailApp, L.detailSite, L.detailTitle].enumerated() { miDetails[i].title = title }
         miInput.title = L.menuInput
         miStartup.title = L.menuStartup
         miAutoUpdate.title = L.menuAutoUpdate
         miLang.title = L.menuLanguage
+        miCustomize.title = L.menuCustomize
         miUpdate.title = L.menuCheckUpdate
         miQuit.title = L.menuQuit
 
         miPause.state = Prefs.paused ? .on : .off
         miSound.state = Prefs.sound ? .on : .off
         miHint.state = Prefs.failHint ? .on : .off
+        miSourceOn.state = Prefs.showSource ? .on : .off
+        miWhenAlways.state = Prefs.sourceWhen == 0 ? .on : .off
+        miWhenAuto.state = Prefs.sourceWhen == 1 ? .on : .off
+        miWhenAlways.isEnabled = Prefs.showSource
+        miWhenAuto.isEnabled = Prefs.showSource
+        for (i, m) in miDetails.enumerated() {
+            m.state = Prefs.sourceDetail == i ? .on : .off
+            m.isEnabled = Prefs.showSource
+        }
         miStartup.state = Prefs.autoStart ? .on : .off
         miAutoUpdate.state = Prefs.autoUpdate ? .on : .off
         miLangEn.state = L.zh ? .off : .on
         miLangZh.state = L.zh ? .on : .off
         miInput.isHidden = !(Prefs.failHint && !CGPreflightListenEventAccess())
 
-        if Prefs.sound && sounds == nil { sounds = Sounds() }
         statusItem.button?.appearsDisabled = Prefs.paused
         statusItem.button?.toolTip = Prefs.paused ? L.tipPaused : L.tip
     }
@@ -219,7 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleSound() {
         Prefs.sound.toggle()
         sync()
-        if Prefs.sound { sounds?.playOk() }
+        if Prefs.sound { sounds.playOk() }
     }
 
     @objc private func toggleHint() {
@@ -243,6 +302,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sync()
     }
 
+    @objc private func toggleSource() {
+        Prefs.showSource.toggle()
+        sync()
+    }
+
+    @objc private func pickWhen(_ sender: NSMenuItem) {
+        Prefs.sourceWhen = sender.tag
+        sync()
+    }
+
+    @objc private func pickDetail(_ sender: NSMenuItem) {
+        Prefs.sourceDetail = sender.tag
+        if sender.tag == 3 && !Prefs.askedAccessibility && !AXIsProcessTrusted() {
+            Prefs.askedAccessibility = true
+            _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        }
+        sync()
+    }
+
     @objc private func toggleAutoUpdate() {
         Prefs.autoUpdate.toggle()
         sync()
@@ -258,9 +336,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sync()
     }
 
+    @objc private func openCustomize() {
+        if customize == nil {
+            customize = Customize(
+                onChange: { [weak self] in
+                    self?.sounds.load(okFile: Prefs.soundOkFile, failFile: Prefs.soundFailFile)
+                    self?.sync()
+                },
+                onShowSample: { [weak self] in self?.showSample() },
+                onTest: { [weak self] ok in
+                    if ok { self?.sounds.playOk() } else { self?.sounds.playNo() }
+                },
+                onClose: { [weak self] in self?.customize = nil })
+        }
+        customize?.show()
+    }
+
+    private func showSample() {
+        let text = L.zh ? "放心复制：让 Ctrl+C 也有看得见的成功" : "The quick brown fox jumps over the lazy dog"
+        let c = Content(kind: .copied, title: L.again[0], meta: L.chars(text.count), sub: text)
+        let src = Source()
+        src.app = "Google Chrome"
+        src.site = "github.com"
+        src.title = "GitHub"
+        src.icon = Icons.app(32)
+        applySource(c, src, show: Prefs.showSource)
+        present(c, repeat: false)
+    }
+
     @objc private func checkUpdateAction() { checkUpdate(manual: true) }
 
-    @objc private func quitAction() { NSApp.terminate(nil) }
+    @objc private func stopSoundsAction() { sounds.stopAll() }
+    @objc private func quitAction() { sounds.stopAll(); NSApp.terminate(nil) }
 
     // MARK: Keyboard (listen-only event tap; records only that a copy/cut chord happened)
 
@@ -333,8 +440,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cc = NSPasteboard.general.changeCount
         guard cc != polled else { return }
         polled = cc
-        changeApp = frontmostName()
-        dbg("clipboard: change seen changeCount=\(cc) front=\(changeApp ?? "-") types=\(NSPasteboard.general.types?.map { $0.rawValue }.joined(separator: ",") ?? "")")
+        changeFront = NSWorkspace.shared.frontmostApplication
+        dbg("clipboard: change seen changeCount=\(cc) front=\(changeFront?.localizedName ?? "-") types=\(NSPasteboard.general.types?.map { $0.rawValue }.joined(separator: ",") ?? "")")
         debounce?.invalidate()
         debounce = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: false) { [weak self] _ in self?.onClipboard() }
     }
@@ -344,7 +451,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if seq == lastSeq { return }
         lastSeq = seq
         if Prefs.paused { dbg("clipboard: ignored (paused)"); return }
-        guard let c = ClipReader.read(app: changeApp) else { dbg("clipboard: ignored (nothing readable)"); return }
+        guard let c = ClipReader.read(app: changeFront?.localizedName) else { dbg("clipboard: ignored (nothing readable)"); return }
         if c.quiet {
             lastSig = c.sig
             lastHold = c.hold
@@ -352,10 +459,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        let src = detectSource(c, atCopy: true, front: changeFront)
         let now = card.now
         let keyed = !tapRunning || (keyKind != 0 && now - keyTick < 1.5)
         if let sig = c.sig, sig == lastSig, !keyed {
             lastHold = c.hold
+            srcSeq = seq; lastSrc = src
+            lastSecret = c.secret
             dbg("clipboard: ignored (same content, no copy key)")
             return
         }
@@ -365,6 +475,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         count = repeatHit ? count + 1 : 1
         lastSig = c.sig
         lastHold = c.hold
+        srcSeq = seq; lastSrc = src
+        lastSecret = c.secret
         lastTime = now
         lastFail = -99
         keyKind = 0
@@ -372,9 +484,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         c.kind = cut ? .cut : .copied
         c.count = count
         c.title = cut && count == 1 ? L.cut : L.again[min(count, L.again.count) - 1]
+        applySource(c, src, show: Prefs.showSource && (Prefs.sourceWhen == 0 || !(keyed && src?.obvious == true)))
         if userBusy() { dbg("clipboard: ignored (screen locked or shielded)"); return }
         present(c, repeat: repeatHit)
-        if Prefs.sound { sounds?.playOk() }
+        if Prefs.sound { sounds.playOk() }
     }
 
     private func onFailCheck() {
@@ -391,18 +504,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         title: keyKind == cutKind ? L.nothingCut : L.nothingCopied,
                         sub: lastHold.map { L.stillHolding + $0 } ?? L.maybeEmpty,
                         count: failCount)
+        c.secret = lastSecret
+        applySource(c, lastSrc, show: Prefs.showSource)
         present(c, repeat: rep)
-        if Prefs.sound { sounds?.playNo() }
+        if Prefs.sound { sounds.playNo() }
     }
 
     private func showClipboard() {
-        if let c = ClipReader.read(app: frontmostName()) {
+        let read = ClipReader.read(app: frontmostName())
+        let c = read ?? Content(kind: .empty, title: L.emptyTitle, sub: L.emptySub)
+        if let read = read {
             c.kind = .info
             c.title = L.onClipboard
-            present(c, repeat: false)
-        } else {
-            present(Content(kind: .empty, title: L.emptyTitle, sub: L.emptySub), repeat: false)
+            let src = NSPasteboard.general.changeCount == srcSeq ? lastSrc
+                : detectSource(read, atCopy: false, front: NSWorkspace.shared.frontmostApplication)
+            applySource(c, src, show: Prefs.showSource)
         }
+        present(c, repeat: false)
+    }
+
+    private func detectSource(_ c: Content?, atCopy: Bool, front: NSRunningApplication?) -> Source? {
+        Sources.detect(front: front, atCopy: atCopy, sourceBundle: c?.sourceBundle, remote: c?.remote ?? false,
+                       site: c?.site, wantTitle: Prefs.sourceDetail >= 3)
+    }
+
+    private func applySource(_ c: Content, _ src: Source?, show: Bool) {
+        guard show, let src = src else { return }
+        c.srcIcon = src.icon
+        c.srcText = Sources.text(src, detail: Prefs.sourceDetail, secret: c.secret)
+        c.srcLine = !c.srcText.isEmpty && (c.secret ? min(Prefs.sourceDetail, 1) : Prefs.sourceDetail) >= 2
     }
 
     private func notice(_ title: String, _ sub: String) {

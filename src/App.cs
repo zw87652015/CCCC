@@ -18,9 +18,13 @@ namespace Cccc
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
         readonly Timer updateTimer = new Timer { Interval = 10000 };
-        readonly MenuItem miShow, miPause, miSound, miHint, miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miUpdate, miQuit;
+        readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
+        readonly MenuItem[] miDetails = new MenuItem[4];
+        readonly MenuItem miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miCustomize, miUpdate, miQuit;
         readonly SynchronizationContext ui;
-        Sounds sounds;
+        readonly Sounds sounds = new Sounds();
+        Customize customize;
+        Bitmap sampleIcon;
         IntPtr trayHandle;
 
         string lastSig, lastHold;
@@ -29,12 +33,22 @@ namespace Cccc
         uint keySeq, lastSeq;
         bool checking;
         string declinedTag;
+        Source lastSrc;
+        uint srcSeq;
+        bool lastSecret;
 
         public App(bool silent, bool updated)
         {
             ui = new WindowsFormsSynchronizationContext();
             L.Apply(set.Lang);
+            sounds.Load(set.SoundOkFile, set.SoundFailFile);
             card.CreateWindow();
+            card.Moved += delegate(int x, int y)
+            {
+                set.FreeX = x;
+                set.FreeY = y;
+                Changed();
+            };
             hook = new KeyHook(hub.Handle);
 
             hub.ClipboardChanged += delegate { debounce.Stop(); debounce.Start(); };
@@ -47,7 +61,22 @@ namespace Cccc
             miShow = new MenuItem(L.MenuShow, delegate { ShowClipboard(); }) { DefaultItem = true };
             miPause = new MenuItem(L.MenuPause, delegate { set.Paused = !set.Paused; set.Save(); Sync(); });
             miSound = new MenuItem(L.MenuSound, delegate { set.Sound = !set.Sound; set.Save(); Sync(); if (set.Sound) sounds.Ok(); });
+            miStopSounds = new MenuItem(L.MenuStopSounds, delegate { sounds.StopAll(); }) { Enabled = false };
             miHint = new MenuItem(L.MenuHint, delegate { set.FailHint = !set.FailHint; set.Save(); Sync(); });
+            miSourceOn = new MenuItem(L.MenuSourceOn, delegate { set.ShowSource = !set.ShowSource; set.Save(); Sync(); });
+            miWhen = new MenuItem(L.SourceWhen) { Enabled = false };
+            miWhenAlways = new MenuItem(L.SourceAlways, delegate { Pick(ref set.SourceWhen, 0); }) { RadioCheck = true };
+            miWhenAuto = new MenuItem(L.SourceAuto, delegate { Pick(ref set.SourceWhen, 1); }) { RadioCheck = true };
+            miDetail = new MenuItem(L.SourceDetail) { Enabled = false };
+            miDetails[0] = new MenuItem(L.DetailIcon, delegate { Pick(ref set.SourceDetail, 0); }) { RadioCheck = true };
+            miDetails[1] = new MenuItem(L.DetailApp, delegate { Pick(ref set.SourceDetail, 1); }) { RadioCheck = true };
+            miDetails[2] = new MenuItem(L.DetailSite, delegate { Pick(ref set.SourceDetail, 2); }) { RadioCheck = true };
+            miDetails[3] = new MenuItem(L.DetailTitle, delegate { Pick(ref set.SourceDetail, 3); }) { RadioCheck = true };
+            miSource = new MenuItem(L.MenuSource, new[]
+            {
+                miSourceOn, new MenuItem("-"), miWhen, miWhenAlways, miWhenAuto,
+                new MenuItem("-"), miDetail, miDetails[0], miDetails[1], miDetails[2], miDetails[3],
+            });
             miStartup = new MenuItem(L.MenuStartup, delegate { Settings.AutoStart = !Settings.AutoStart; Sync(); });
             miAutoUpdate = new MenuItem(L.MenuAutoUpdate, delegate
             {
@@ -57,15 +86,17 @@ namespace Cccc
             miLangEn = new MenuItem("English", delegate { SetLang("en"); }) { RadioCheck = true };
             miLangZh = new MenuItem("中文", delegate { SetLang("zh"); }) { RadioCheck = true };
             miLang = new MenuItem(L.MenuLanguage, new[] { miLangEn, miLangZh });
+            miCustomize = new MenuItem(L.MenuCustomize, delegate { OpenCustomize(); });
             miUpdate = new MenuItem(L.MenuCheckUpdate, delegate { CheckUpdate(true); });
             miQuit = new MenuItem(L.MenuQuit, delegate { Quit(); });
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miHint, miStartup, miAutoUpdate, miLang,
-                new MenuItem("-"), miUpdate,
+                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miSource, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miCustomize, miUpdate,
                 new MenuItem("-"), miQuit,
             });
+            tray.ContextMenu.Popup += delegate { miStopSounds.Enabled = sounds.Playing; };
             tray.MouseClick += (o, e) => { if (e.Button == MouseButtons.Left) ShowClipboard(); };
             SystemEvents.UserPreferenceChanged += (o, e) => { if (e.Category == UserPreferenceCategory.General) Sync(); };
 
@@ -81,6 +112,9 @@ namespace Cccc
             {
                 lastSig = now.Sig;
                 lastHold = now.Hold;
+                lastSrc = Sources.Detect(false, now.Site);
+                srcSeq = lastSeq;
+                lastSecret = now.Secret;
                 if (now.Thumb != null) now.Thumb.Dispose();
             }
             if (updated) Notice(L.UpdatedTitle(Updater.Show(Updater.Current)), L.UpdatedSub);
@@ -95,28 +129,91 @@ namespace Cccc
             Sync();
         }
 
+        void Changed()
+        {
+            set.Save();
+            Sync();
+            sounds.Load(set.SoundOkFile, set.SoundFailFile);
+        }
+
+        void OpenCustomize()
+        {
+            if (customize == null)
+            {
+                customize = new Customize(set, Changed, ShowSample, TestSound);
+                customize.Closed += delegate { customize = null; };
+            }
+            customize.Show();
+            customize.Activate();
+        }
+
+        void ShowSample(bool failed)
+        {
+            string text = L.Zh ? "放心复制：让 Ctrl+C 也有看得见的成功" : "The quick brown fox jumps over the lazy dog";
+            if (sampleIcon == null) sampleIcon = Icons.App(32);
+            Content c;
+            if (failed)
+            {
+                c = new Content { Kind = Kind.Fail, Title = L.NothingCopied, Sub = L.StillHolding + text };
+                ApplySource(c, new Source { App = "Microsoft Word", Icon = sampleIcon }, set.ShowSource);
+            }
+            else
+            {
+                c = new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text };
+                ApplySource(c, new Source { App = "Google Chrome", Site = "github.com", Title = "GitHub", Icon = sampleIcon }, set.ShowSource);
+            }
+            card.Show(c, false);
+        }
+
+        void TestSound(bool ok)
+        {
+            if (ok) sounds.Ok(); else sounds.No();
+        }
+
         void Sync()
         {
             L.Apply(set.Lang);
+            card.Apply(set);
             miShow.Text = L.MenuShow;
             miPause.Text = L.MenuPause;
             miSound.Text = L.MenuSound;
+            miStopSounds.Text = L.MenuStopSounds;
             miHint.Text = L.MenuHint;
+            miSource.Text = L.MenuSource;
+            miSourceOn.Text = L.MenuSourceOn;
+            miWhen.Text = L.SourceWhen;
+            miWhenAlways.Text = L.SourceAlways;
+            miWhenAuto.Text = L.SourceAuto;
+            miDetail.Text = L.SourceDetail;
+            miDetails[0].Text = L.DetailIcon;
+            miDetails[1].Text = L.DetailApp;
+            miDetails[2].Text = L.DetailSite;
+            miDetails[3].Text = L.DetailTitle;
             miStartup.Text = L.MenuStartup;
             miAutoUpdate.Text = L.MenuAutoUpdate;
             miLang.Text = L.MenuLanguage;
+            miCustomize.Text = L.MenuCustomize;
             miUpdate.Text = L.MenuCheckUpdate;
             miQuit.Text = L.MenuQuit;
             miPause.Checked = set.Paused;
             miSound.Checked = set.Sound;
             miHint.Checked = set.FailHint;
+            miSourceOn.Checked = set.ShowSource;
+            miWhenAlways.Checked = set.SourceWhen == 0;
+            miWhenAuto.Checked = set.SourceWhen == 1;
+            miWhenAlways.Enabled = miWhenAuto.Enabled = set.ShowSource;
+            for (int i = 0; i < miDetails.Length; i++)
+            {
+                miDetails[i].Checked = set.SourceDetail == i;
+                miDetails[i].Enabled = set.ShowSource;
+            }
             miStartup.Checked = Settings.AutoStart;
             miAutoUpdate.Checked = set.AutoUpdate;
             miLangEn.Checked = !L.Zh;
             miLangZh.Checked = L.Zh;
-            if (set.Sound && sounds == null) sounds = new Sounds();
+            if (customize != null) customize.Reload();
 
-            Native.ThemeMenus(Theme.Current().Dark);
+            Native.ThemeMenus(Theme.Resolve(set, !Theme.SystemLight()).Dark);
             IntPtr old = trayHandle;
             int size = SystemInformation.SmallIconSize.Width;
             using (var bmp = Icons.Tray(size, Theme.TaskbarLight(), set.Paused)) trayHandle = bmp.GetHicon();
@@ -144,13 +241,14 @@ namespace Cccc
             if (set.Paused) return;
             Content c = ClipReader.Read();
             if (c == null) return;
+            Source src = Sources.Detect(true, c.Site);
 
             // Same content rewritten with no copy key pressed, e.g. Office re-publishing
             // the clipboard when the source document closes.
             bool keyed = keyKind != 0 && unchecked(Environment.TickCount - keyTick) < 1500;
             if (c.Sig != null && c.Sig == lastSig && !keyed)
             {
-                lastHold = c.Hold;
+                lastHold = c.Hold; srcSeq = seq; lastSrc = src; lastSecret = c.Secret;
                 if (c.Thumb != null) c.Thumb.Dispose();
                 return;
             }
@@ -159,12 +257,13 @@ namespace Cccc
             bool cut = c.CutHint || (keyKind == KeyHook.CutKey && keyed);
             bool repeat = c.Sig != null && c.Sig == lastSig && now - lastTime < 15;
             count = repeat ? count + 1 : 1;
-            lastSig = c.Sig; lastHold = c.Hold; lastTime = now; lastFail = -99;
+            lastSig = c.Sig; lastHold = c.Hold; srcSeq = seq; lastSrc = src; lastSecret = c.Secret; lastTime = now; lastFail = -99;
             keyKind = 0;
 
             c.Kind = cut ? Kind.Cut : Kind.Copied;
             c.Count = count;
             c.Title = cut && count == 1 ? L.Cut : L.Again[Math.Min(count, L.Again.Length) - 1];
+            ApplySource(c, src, set.ShowSource && src != null && (set.SourceWhen == 0 || !(keyed && src.Obvious)));
             if (Native.UserBusy()) { if (c.Thumb != null) c.Thumb.Dispose(); return; }
             card.Show(c, repeat);
             if (set.Sound) sounds.Ok();
@@ -177,13 +276,16 @@ namespace Cccc
             bool repeat = now - lastFail < 6;
             failCount = repeat ? failCount + 1 : 1;
             lastFail = now;
-            card.Show(new Content
+            var fail = new Content
             {
                 Kind = Kind.Fail,
                 Title = keyKind == KeyHook.CutKey ? L.NothingCut : L.NothingCopied,
                 Sub = lastHold != null ? L.StillHolding + lastHold : L.MaybeEmpty,
                 Count = failCount,
-            }, repeat);
+                Secret = lastSecret,
+            };
+            ApplySource(fail, lastSrc, set.ShowSource && lastSrc != null);
+            card.Show(fail, repeat);
             if (set.Sound) sounds.No();
         }
 
@@ -191,8 +293,28 @@ namespace Cccc
         {
             Content c = ClipReader.Read();
             if (c == null) c = new Content { Kind = Kind.Empty, Title = L.EmptyTitle, Sub = L.EmptySub };
-            else { c.Kind = Kind.Info; c.Title = L.OnClipboard; }
+            else
+            {
+                c.Kind = Kind.Info; c.Title = L.OnClipboard;
+                Source src = Native.GetClipboardSequenceNumber() == srcSeq ? lastSrc : Sources.Detect(false, c.Site);
+                ApplySource(c, src, set.ShowSource && src != null);
+            }
             card.Show(c, false);
+        }
+
+        void ApplySource(Content c, Source src, bool show)
+        {
+            if (!show) return;
+            c.SrcIcon = src.Icon;
+            c.SrcText = Sources.Text(src, set.SourceDetail, c.Secret);
+            c.SrcLine = c.SrcText.Length > 0 && (c.Secret ? Math.Min(set.SourceDetail, 1) : set.SourceDetail) >= 2;
+        }
+
+        void Pick(ref int field, int value)
+        {
+            field = value;
+            set.Save();
+            Sync();
         }
 
         void Notice(string title, string sub)
@@ -273,6 +395,7 @@ namespace Cccc
         void Quit()
         {
             hook.Stop();
+            sounds.StopAll();
             tray.Visible = false;
             tray.Dispose();
             hub.Close();
@@ -288,6 +411,7 @@ namespace Cccc
         [STAThread]
         static void Main(string[] args)
         {
+            AppContext.SetSwitch("Switch.System.Windows.DoNotScaleForDpiChanges", false);
             string verb = args.Length > 0 ? args[0] : "";
             if (verb == "--export-icon" && args.Length > 1) { Icons.ExportIco(args[1]); return; }
             if (verb == "--sheet" && args.Length > 1) { Sheet.Render(args[1]); return; }

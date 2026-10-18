@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
@@ -56,9 +57,75 @@ namespace Cccc
             ShadowNear = 0.12f,
         };
 
+        static Theme Make(bool dark, Color bg, Color border, Color title, Color sub, Color meta, Color ok, Color warn)
+        {
+            return new Theme
+            {
+                Dark = dark, Bg = bg, Border = border, Title = title, Sub = sub, Meta = meta, Ok = ok, Warn = warn,
+                ShadowFar = dark ? 0.55f : 0.22f, ShadowNear = dark ? 0.35f : 0.12f,
+            };
+        }
+
+        // Graphite, High contrast, Pastel: dark then light for each, indexed by (palette - 1) * 2 + (light ? 1 : 0).
+        static readonly Theme[] Palettes =
+        {
+            Make(true, Color.FromArgb(32, 32, 34), Color.FromArgb(30, 255, 255, 255), Color.FromArgb(240, 240, 240), Color.FromArgb(170, 170, 170), Color.FromArgb(120, 120, 120), Color.FromArgb(120, 120, 128), Color.FromArgb(200, 150, 60)),
+            Make(false, Color.FromArgb(250, 250, 250), Color.FromArgb(24, 0, 0, 0), Color.FromArgb(24, 24, 24), Color.FromArgb(96, 96, 96), Color.FromArgb(150, 150, 150), Color.FromArgb(70, 70, 76), Color.FromArgb(190, 130, 40)),
+            Make(true, Color.FromArgb(0, 0, 0), Color.FromArgb(120, 255, 255, 255), Color.FromArgb(255, 255, 255), Color.FromArgb(230, 230, 230), Color.FromArgb(200, 200, 200), Color.FromArgb(0, 200, 80), Color.FromArgb(255, 190, 0)),
+            Make(false, Color.FromArgb(255, 255, 255), Color.FromArgb(140, 0, 0, 0), Color.FromArgb(0, 0, 0), Color.FromArgb(30, 30, 30), Color.FromArgb(70, 70, 70), Color.FromArgb(0, 130, 50), Color.FromArgb(190, 100, 0)),
+            Make(true, Color.FromArgb(44, 40, 56), Color.FromArgb(26, 255, 255, 255), Color.FromArgb(248, 244, 255), Color.FromArgb(196, 188, 214), Color.FromArgb(146, 138, 166), Color.FromArgb(126, 214, 170), Color.FromArgb(255, 190, 130)),
+            Make(false, Color.FromArgb(250, 246, 255), Color.FromArgb(24, 60, 40, 100), Color.FromArgb(40, 32, 56), Color.FromArgb(110, 100, 130), Color.FromArgb(160, 150, 180), Color.FromArgb(88, 180, 136), Color.FromArgb(240, 160, 90)),
+        };
+
         const string Personalize = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
-        public static Theme Current() { return ReadFlag("AppsUseLightTheme") ? LightTheme : DarkTheme; }
+        public static Theme Resolve(Settings s, bool systemDark)
+        {
+            bool dark = s.ThemeMode == 2 || (s.ThemeMode == 0 && systemDark);
+            Theme v = s.Palette == 0 ? (dark ? DarkTheme : LightTheme) : Palettes[(s.Palette - 1) * 2 + (dark ? 0 : 1)];
+            var t = (Theme)v.MemberwiseClone();
+            Color c;
+            if (TryColor(s.OkColor, out c)) t.Ok = c;
+            if (TryColor(s.WarnColor, out c)) t.Warn = c;
+            if (s.FullPalette)
+            {
+                if (TryColor(s.BgColor, out c)) t.Bg = c;
+                if (TryColor(s.BorderColor, out c)) t.Border = c;
+                if (TryColor(s.TitleColor, out c)) t.Title = c;
+                if (TryColor(s.SubColor, out c)) t.Sub = c;
+                if (TryColor(s.MetaColor, out c)) t.Meta = c;
+            }
+            t.Dark = Lum(t.Bg) < 0.5;
+            if (t.Dark != v.Dark)
+            {
+                t.ShadowFar = t.Dark ? DarkTheme.ShadowFar : LightTheme.ShadowFar;
+                t.ShadowNear = t.Dark ? DarkTheme.ShadowNear : LightTheme.ShadowNear;
+            }
+            return t;
+        }
+
+        public static bool TryColor(string s, out Color c)
+        {
+            long v;
+            c = Color.Empty;
+            if (s == null || s.Length != 9 || s[0] != '#' || !long.TryParse(s.Substring(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out v)) return false;
+            c = Color.FromArgb((int)(uint)v);
+            return true;
+        }
+
+        public static string Hex(Color c) { return string.Format("#{0:X2}{1:X2}{2:X2}{3:X2}", c.A, c.R, c.G, c.B); }
+
+        public static double Lum(Color c) { return 0.2126 * Lin(c.R) + 0.7152 * Lin(c.G) + 0.0722 * Lin(c.B); }
+
+        static double Lin(int v)
+        {
+            double x = v / 255.0;
+            return x <= 0.03928 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4);
+        }
+
+        public static Color Glyph(Color accent) { return Lum(accent) > 0.7 ? Color.FromArgb(30, 30, 30) : Color.White; }
+
+        public static bool SystemLight() { return ReadFlag("AppsUseLightTheme"); }
         public static bool TaskbarLight() { return ReadFlag("SystemUsesLightTheme"); }
 
         static bool ReadFlag(string name)

@@ -8,7 +8,8 @@ namespace Cccc
     {
         public const int WM_CLIPBOARDUPDATE = 0x031D;
         public const int WM_MOUSEACTIVATE = 0x0021;
-        public const int WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205;
+        public const int WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205;
+        public const int WM_MOUSEMOVE = 0x0200;
         public const int WM_APP_KEY = 0x8001;
         public const int MA_NOACTIVATE = 3;
         public const int WS_POPUP = unchecked((int)0x80000000);
@@ -63,9 +64,14 @@ namespace Cccc
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT pt);
         [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
+        [DllImport("user32.dll")] public static extern IntPtr SetCapture(IntPtr hwnd);
+        [DllImport("user32.dll")] public static extern bool ReleaseCapture();
         [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr hmon, ref MONITORINFO mi);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hwnd, StringBuilder sb, int max);
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextLength(IntPtr hwnd);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder sb, int max);
+        [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
         [DllImport("user32.dll")] public static extern IntPtr SetWindowsHookEx(int id, HookProc fn, IntPtr hMod, uint threadId);
         [DllImport("user32.dll")] public static extern bool UnhookWindowsHookEx(IntPtr hook);
@@ -83,9 +89,13 @@ namespace Cccc
         [DllImport("gdi32.dll")] public static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER bmi, uint usage, out IntPtr bits, IntPtr section, uint offset);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr GetModuleHandle(string name);
         [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+        [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder sb, ref uint size);
+        [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
         [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr hmon, int type, out uint dpiX, out uint dpiY);
         [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
         [DllImport("dwmapi.dll")] public static extern int DwmFlush();
+        [DllImport("winmm.dll", CharSet = CharSet.Unicode)] public static extern int mciSendString(string command, StringBuilder ret, int retLen, IntPtr callback);
         [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);
         [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint ms);
         [DllImport("uxtheme.dll", EntryPoint = "#135")] static extern int SetPreferredAppMode(int mode);

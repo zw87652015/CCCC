@@ -32,6 +32,7 @@ namespace Cccc
 
             var c = new Content();
             if (Secret(f) || Dword(d, f, "CanIncludeInClipboardHistory") == 0) return Private(c);
+            c.Site = Site(d, f);
 
             try
             {
@@ -81,7 +82,7 @@ namespace Cccc
             if (raw == null || raw.Length == 0) return null;
             var c = new Content();
             if (Secret(raw)) return Private(c);
-            string app = OwnerName();
+            string app = Sources.OwnerApp();
             c.Meta = L.AppData;
             c.Sub = app != null ? L.KeptIn(app) : L.Rich;
             c.Hold = app != null ? L.AppContent(app) : L.Rich;
@@ -93,7 +94,21 @@ namespace Cccc
         {
             c.Meta = L.Private;
             c.Sub = c.Hold = L.PrivateSub;
+            c.Secret = true;
             return c;
+        }
+
+        static string Site(IDataObject d, string[] f)
+        {
+            if (!Has(f, "HTML Format")) return null;
+            try
+            {
+                object o = d.GetData("HTML Format");
+                var ms = o as MemoryStream;
+                string html = ms != null ? Encoding.UTF8.GetString(ms.ToArray()) : o as string;
+                return html != null ? Sources.SiteFromHtml(html) : null;
+            }
+            catch (Exception) { return null; }
         }
 
         static bool Secret(string[] f)
@@ -119,28 +134,6 @@ namespace Cccc
                 return names.ToArray();
             }
             finally { Native.CloseClipboard(); }
-        }
-
-        static string OwnerName()
-        {
-            IntPtr owner = Native.GetClipboardOwner();
-            if (owner == IntPtr.Zero) return null;
-            uint pid;
-            Native.GetWindowThreadProcessId(owner, out pid);
-            try
-            {
-                using (var p = System.Diagnostics.Process.GetProcessById((int)pid))
-                {
-                    try
-                    {
-                        string desc = p.MainModule.FileVersionInfo.FileDescription;
-                        if (!string.IsNullOrEmpty(desc) && desc.Trim().Length > 0) return desc.Trim();
-                    }
-                    catch (Exception) { }
-                    return p.ProcessName;
-                }
-            }
-            catch (Exception) { return null; }
         }
 
         static bool Has(string[] f, string name) { return Array.IndexOf(f, name) >= 0; }
