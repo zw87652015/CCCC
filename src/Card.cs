@@ -156,17 +156,27 @@ namespace Cccc
         {
             st = settings;
             bool sys = Theme.SystemLight();
-            string size = st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + L.Zh;
+            string size = st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple + "|" + L.Zh;
             string theme = st.ThemeMode + "|" + st.Palette + "|" + st.FullPalette + "|" + st.OkColor + "|" + st.WarnColor
-                + "|" + st.BgColor + "|" + st.BorderColor + "|" + st.TitleColor + "|" + st.SubColor + "|" + st.MetaColor + "|" + sys;
+                + "|" + st.BgColor + "|" + st.BorderColor + "|" + st.TitleColor + "|" + st.SubColor + "|" + st.MetaColor + "|" + sys + "|" + st.Transparency;
             if (size != sizeSig)
             {
                 sizeSig = size;
                 k = st.TextScale / 100f;
-                W = (float)Math.Round(320 * (0.5 + 0.5 * k));
-                H = Math.Max(64, 25 + 39 * k);
-                Line = 18 * k;
-                HMax = H + Line;
+                if (st.Simple)
+                {
+                    W = 220;
+                    H = Math.Max(48, 26 + 22 * k);
+                    Line = 18 * k;
+                    HMax = H;
+                }
+                else
+                {
+                    W = (float)Math.Round(320 * (0.5 + 0.5 * k));
+                    H = Math.Max(64, 25 + 39 * k);
+                    Line = 18 * k;
+                    HMax = H + Line;
+                }
                 CanvasW = W + 2 * CX;
                 CanvasH = HMax + CY + 32;
                 Fonts();
@@ -243,7 +253,7 @@ namespace Cccc
 
         string PlaceSig()
         {
-            return st.Position + "|" + st.FreeX + "|" + st.FreeY + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily;
+            return st.Position + "|" + st.FreeX + "|" + st.FreeY + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple;
         }
 
         void Prepare()
@@ -347,7 +357,7 @@ namespace Cccc
                 double u = ts / 0.5;
                 dx = 7 * Math.Sin(u * Math.PI * 7) * (1 - u) * (1 - u);
             }
-            byte alpha = (byte)Math.Round(255 * Ease.OutCubic(Math.Min(1, vis * 1.5)));
+            byte alpha = (byte)Math.Round(255 * (100 - st.Transparency) / 100.0 * Ease.OutCubic(Math.Min(1, vis * 1.5)));
             Push(baseX + (int)Math.Round(dx * s), baseY + (int)Math.Round(dy * s), alpha);
             Native.DwmFlush();
         }
@@ -489,6 +499,16 @@ namespace Cccc
         void DrawText(Graphics g, double now, Color accent)
         {
             float right = CX + W - 14;
+
+            if (st.Simple)
+            {
+                // One-line card: just the title next to the status icon.
+                float sa = (float)Ease.OutCubic((now - tText) / 0.26);
+                float sl = (float)Ease.OutCubic((now - tTitle) / 0.28);
+                using (var b = new SolidBrush(Color.FromArgb((int)(255 * sa * sl), th.Title)))
+                    g.DrawString(cur.Title, fTitle, b, new RectangleF(CX + 58 + 6 * (1 - sa), Top + (CardH - 22 * k) / 2, W - 72, 22 * k), fmt);
+                return;
+            }
 
             if (cur.Thumb != null)
             {

@@ -96,6 +96,14 @@ enum Prefs {
         get { range("TextScale", 100, 80, 160) }
         set { d.set(newValue, forKey: "TextScale") }
     }
+    static var transparency: Int {
+        get { range("Transparency", 0, 0, 75) }
+        set { d.set(newValue, forKey: "Transparency") }
+    }
+    static var simple: Bool {
+        get { d.bool(forKey: "Simple") }
+        set { d.set(newValue, forKey: "Simple") }
+    }
     static var fontFamily: String? {
         get { text("FontFamily") }
         set { d.set(newValue, forKey: "FontFamily") }
@@ -113,6 +121,7 @@ enum Prefs {
         themeMode = 0; palette = 0; fullPalette = false
         okColor = nil; warnColor = nil; bgColor = nil; borderColor = nil; titleColor = nil; subColor = nil; metaColor = nil
         durationMs = 1900; stayUntilClicked = false; position = 6; scale = 100; textScale = 100
+        transparency = 0; simple = false
         fontFamily = nil; soundOkFile = nil; soundFailFile = nil
         showSource = true; sourceWhen = 1; sourceDetail = 1
     }

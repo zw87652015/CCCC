@@ -80,7 +80,7 @@ namespace Cccc
         readonly ToggleButton[] spots = new ToggleButton[9];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay;
+        CheckBox chkPause, chkWarn, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple;
         ToggleButton chipNear, chipFree;
         Border monitorEl, miniCard;
         Grid spotsPanel;
@@ -88,8 +88,8 @@ namespace Cccc
         TextBlock hintFree;
         bool miniDrag;
         double miniOffX, miniOffY;
-        Slider sldSize, sldText, sldDur;
-        TextBlock lblSize, lblText, lblDur;
+        Slider sldSize, sldText, sldDur, sldTrans;
+        TextBlock lblSize, lblText, lblDur, lblTrans;
         ComboBox cmbFont;
         Sound soundOk, soundFail;
         Button chevron;
@@ -190,10 +190,13 @@ namespace Cccc
             else if (turnedOn) SyncExpanded(true);
             sldSize.Value = set.Scale;
             sldText.Value = set.TextScale;
+            chkSimple.IsChecked = set.Simple;
+            sldTrans.Value = set.Transparency;
             sldDur.Value = set.DurationMs;
             sldDur.IsEnabled = !set.StayUntilClicked;
             lblSize.Text = set.Scale + "%";
             lblText.Text = set.TextScale + "%";
+            lblTrans.Text = set.Transparency + "%";
             lblDur.Text = (set.DurationMs / 1000.0).ToString("0.0") + " s";
             int fi = fonts.IndexOf(set.FontFamily);
             cmbFont.SelectedIndex = fi < 0 ? 0 : fi;
@@ -219,7 +222,7 @@ namespace Cccc
         {
             return string.Join("|", new object[] { s.ThemeMode, s.Palette, s.OkColor, s.BgColor, s.BorderColor, s.TitleColor,
                 s.SubColor, s.MetaColor, s.FullPalette, s.FontFamily, s.Scale, s.TextScale, s.Position, s.FreeX, s.FreeY,
-                s.DurationMs, s.StayUntilClicked, s.ShowSource, s.SourceWhen, s.SourceDetail, s.Lang });
+                s.DurationMs, s.StayUntilClicked, s.ShowSource, s.SourceWhen, s.SourceDetail, s.Simple, s.Transparency, s.Lang });
         }
 
         static string SigFailed(Settings s) { return s.WarnColor + "|" + s.FailHint; }
@@ -582,6 +585,12 @@ namespace Cccc
             lblText = new TextBlock { Style = Res<Style>("ValueText"), Width = 56, Margin = new Thickness(10, 0, 0, 0) };
             var textRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldText, lblText } };
 
+            chkSimple = Toggle();
+            BindToggle(chkSimple, v => set.Simple = v);
+            sldTrans = Slide(0, 75, 5, v => set.Transparency = v);
+            lblTrans = new TextBlock { Style = Res<Style>("ValueText"), Width = 56, Margin = new Thickness(10, 0, 0, 0) };
+            var transRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldTrans, lblTrans } };
+
             return PageOf(
                 SettingCard(L.ThemeTitle, L.HintTheme, themeSeg),
                 Header(L.PaletteTitle),
@@ -593,7 +602,9 @@ namespace Cccc
                 Header(L.SizeTitle),
                 SettingCard(L.CardSize, L.HintCardSize, sizeRow),
                 SettingCard(L.FontTitle, L.HintFont, cmbFont),
-                SettingCard(L.TextSize, L.HintTextSize, textRow));
+                SettingCard(L.TextSize, L.HintTextSize, textRow),
+                SettingCard(L.SimpleMode, L.HintSimple, chkSimple),
+                SettingCard(L.Transparency, L.HintTransparency, transRow));
         }
 
         void OnExpandHeader(object s, System.Windows.Input.MouseButtonEventArgs e)
@@ -1111,6 +1122,8 @@ namespace Cccc
                 case "sound": return chkSound;
                 case "source": return chkSource;
                 case "stay": return chkStay;
+                case "simple": return chkSimple;
+                case "trans": return sldTrans;
                 case "full": return chkFull;
                 case "size": return sldSize;
                 case "text": return sldText;

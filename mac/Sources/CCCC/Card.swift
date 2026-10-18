@@ -57,6 +57,7 @@ final class Card {
     private(set) var canvasW: CGFloat = 368, canvasH: CGFloat = 134
     private(set) var k: CGFloat = 1, sc: CGFloat = 1
     private var sizeSig = "", themeSig = ""
+    private var simple = false
     private var fTitle = NSFont.systemFont(ofSize: 14, weight: .semibold)
     private var fSub = NSFont.systemFont(ofSize: 12.5)
     private var fMeta = NSFont.systemFont(ofSize: 12)
@@ -100,14 +101,23 @@ final class Card {
     func apply() {
         let pct = defaults ? 100 : Prefs.textScale
         let family = defaults ? nil : Prefs.fontFamily
-        let size = "\(pct)|\(family ?? "")|\(L.zh)"
+        let simple = !defaults && Prefs.simple
+        let size = "\(pct)|\(family ?? "")|\(simple)|\(L.zh)"
         if size != sizeSig {
             sizeSig = size
+            self.simple = simple
             k = CGFloat(pct) / 100
-            W = (320 * (0.5 + 0.5 * k)).rounded()
-            H = max(64, 25 + 39 * k)
-            line = 18 * k
-            hMax = H + line
+            if simple {
+                W = 220
+                H = max(48, 26 + 22 * k)
+                line = 18 * k
+                hMax = H
+            } else {
+                W = (320 * (0.5 + 0.5 * k)).rounded()
+                H = max(64, 25 + 39 * k)
+                line = 18 * k
+                hMax = H + line
+            }
             canvasW = W + 2 * Card.CX
             canvasH = hMax + Card.CY + 32
             fonts(family)
@@ -249,7 +259,7 @@ final class Card {
             dx = CGFloat(7 * sin(u * .pi * 7) * (1 - u) * (1 - u))
         }
         panel.setFrameOrigin(NSPoint(x: baseX + dx, y: baseY - dy))
-        panel.alphaValue = CGFloat(Ease.outCubic(min(1, vis * 1.5)))
+        panel.alphaValue = CGFloat(Ease.outCubic(min(1, vis * 1.5))) * CGFloat(100 - Prefs.transparency) / 100
     }
 
     private func hideNow() {
@@ -377,6 +387,15 @@ final class Card {
 
     private func drawText(_ ctx: CGContext, _ c: Content, now t: Double, accent: NSColor) {
         var right = Card.CX + W - 14
+
+        if simple {
+            // One-line card: just the title next to the status icon.
+            let ta = CGFloat(Ease.outCubic((t - tText) / 0.26))
+            let la = CGFloat(Ease.outCubic((t - tTitle) / 0.28))
+            let tx = Card.CX + 58 + 6 * (1 - ta)
+            drawLine(c.title, fTitle, th.title.withAlphaComponent(ta * la), x: tx, y: cardTop + (cardH - 22 * k) / 2, w: W - 72, h: 22 * k)
+            return
+        }
 
         if let thumb = c.thumb {
             let tr = CGRect(x: Card.CX + W - 12 - 40, y: cardTop + (cardH - 40) / 2, width: 40, height: 40)

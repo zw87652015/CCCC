@@ -138,6 +138,8 @@ enum L {
     static var fontTitle: String { t("Font", "字体") }
     static var fontDefault: String { t("Default", "默认") }
     static var textSize: String { t("Text size", "文字大小") }
+    static var simpleMode: String { t("Simple mode", "简易模式") }
+    static var transparency: String { t("Transparency", "透明度") }
     static var positionTitle: String { t("Position", "位置") }
     static var posNear: String { t("Near the mouse pointer", "鼠标附近") }
     static var posRandom: String { t("Random", "随机") }

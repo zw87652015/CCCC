@@ -131,6 +131,10 @@ namespace Cccc
         public static string FontTitle { get { return T("Font", "字体"); } }
         public static string FontDefault { get { return T("Default", "默认"); } }
         public static string TextSize { get { return T("Text size", "文字大小"); } }
+        public static string SimpleMode { get { return T("Simple mode", "简易模式"); } }
+        public static string HintSimple { get { return T("Only the status icon and title on a compact one-line card", "紧凑的单行卡片，只显示状态图标和标题"); } }
+        public static string Transparency { get { return T("Transparency", "透明度"); } }
+        public static string HintTransparency { get { return T("Card opacity; 0% is fully opaque", "卡片不透明度，0% 为完全不透明"); } }
         public static string PositionTitle { get { return T("Position", "位置"); } }
         public static string PosNear { get { return T("Near the mouse pointer", "鼠标附近"); } }
         public static string PosFree { get { return T("Freedom", "自由"); } }

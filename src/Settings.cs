@@ -14,11 +14,11 @@ namespace Cccc
         internal static string Key = @"Software\CCCC";
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-        public bool Paused, Sound, FailHint = true, AutoUpdate = true, ShowSource = true;
+        public bool Paused, Sound, FailHint = true, AutoUpdate = true, ShowSource = true, Simple;
         public bool FullPalette, StayUntilClicked;
         public int SourceWhen = 1, SourceDetail = 1;
         public int ThemeMode, Palette, DurationMs = 1900, Position = 6, Scale = 100, TextScale = 100;
-        public int FreeX = 500, FreeY = 900;
+        public int FreeX = 500, FreeY = 900, Transparency;
         public string Lang = "auto";
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
@@ -45,6 +45,8 @@ namespace Cccc
                 s.Position = Num(k, "Position", s.Position, 0, 10);
                 s.FreeX = Num(k, "FreeX", s.FreeX, 0, 1000);
                 s.FreeY = Num(k, "FreeY", s.FreeY, 0, 1000);
+                s.Transparency = Num(k, "Transparency", s.Transparency, 0, 75);
+                s.Simple = Flag(k, "Simple", s.Simple);
                 s.Scale = Num(k, "Scale", s.Scale, 75, 200);
                 s.TextScale = Num(k, "TextScale", s.TextScale, 80, 160);
                 s.OkColor = HexColor(k, "OkColor");
@@ -81,6 +83,8 @@ namespace Cccc
                 k.SetValue("Position", Position, RegistryValueKind.DWord);
                 k.SetValue("FreeX", FreeX, RegistryValueKind.DWord);
                 k.SetValue("FreeY", FreeY, RegistryValueKind.DWord);
+                k.SetValue("Transparency", Transparency, RegistryValueKind.DWord);
+                k.SetValue("Simple", Simple ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Scale", Scale, RegistryValueKind.DWord);
                 k.SetValue("TextScale", TextScale, RegistryValueKind.DWord);
                 SetStr(k, "OkColor", OkColor);
@@ -99,7 +103,8 @@ namespace Cccc
         public void ResetDisplay()
         {
             ThemeMode = Palette = 0;
-            FullPalette = StayUntilClicked = false;
+            FullPalette = StayUntilClicked = Simple = false;
+            Transparency = 0;
             DurationMs = 1900; Position = 6; Scale = 100; TextScale = 100;
             FreeX = 500; FreeY = 900;
             OkColor = WarnColor = BgColor = BorderColor = TitleColor = SubColor = MetaColor = null;

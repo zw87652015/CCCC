@@ -57,10 +57,10 @@ final class Customize: NSObject, NSWindowDelegate {
     private var fontFamilies: [String] = []
 
     private var chkPause: NSButton!, chkWarn: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
-    private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!
+    private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!
     private var popLang: NSPopUpButton!, popTheme: NSPopUpButton!, popPalette: NSPopUpButton!, popFont: NSPopUpButton!
-    private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!
-    private var lblSize: NSTextField!, lblText: NSTextField!, lblDuration: NSTextField!
+    private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!, sldTrans: NSSlider!
+    private var lblSize: NSTextField!, lblText: NSTextField!, lblDuration: NSTextField!, lblTrans: NSTextField!
     private var spots: [NSButton] = []
     private var rbNear: NSButton!, rbRandom: NSButton!
     private var rbWhenAlways: NSButton!, rbWhenAuto: NSButton!
@@ -276,12 +276,19 @@ final class Customize: NSObject, NSWindowDelegate {
         sldText.numberOfTickMarks = 17
         sldText.allowsTickMarkValuesOnly = true
         lblText = NSTextField(labelWithString: "")
+        chkSimple = check(L.simpleMode) { c in Prefs.simple = Customize.isOn(c) }
+        sldTrans = slider(0, 75) { c in Prefs.transparency = Int(round((c as! NSSlider).doubleValue)) }
+        sldTrans.numberOfTickMarks = 16
+        sldTrans.allowsTickMarkValuesOnly = true
+        lblTrans = NSTextField(labelWithString: "")
 
         var rows: [NSView] = [popTheme, popPalette, ok, warn, chkFull]
         rows += extra
         rows.append(row(L.cardSize, [sldSize, lblSize]))
         rows.append(row(L.fontTitle, [popFont]))
         rows.append(row(L.textSize, [sldText, lblText]))
+        rows.append(chkSimple)
+        rows.append(row(L.transparency, [sldTrans, lblTrans]))
         return page(rows)
     }
 
@@ -396,6 +403,8 @@ final class Customize: NSObject, NSWindowDelegate {
         chkFull.state = Prefs.fullPalette ? .on : .off
         sldSize.doubleValue = Double(Prefs.scale)
         sldText.doubleValue = Double(Prefs.textScale)
+        chkSimple.state = Prefs.simple ? .on : .off
+        sldTrans.doubleValue = Double(Prefs.transparency)
         sldDuration.doubleValue = Double(Prefs.durationMs / 100)
         sldDuration.isEnabled = !Prefs.stayUntilClicked
         chkStay.state = Prefs.stayUntilClicked ? .on : .off
@@ -432,6 +441,7 @@ final class Customize: NSObject, NSWindowDelegate {
     private func updateLabels() {
         lblSize.stringValue = "\(Prefs.scale)%"
         lblText.stringValue = "\(Prefs.textScale)%"
+        lblTrans.stringValue = "\(Prefs.transparency)%"
         lblDuration.stringValue = String(format: "%.1f s", Double(Prefs.durationMs) / 1000)
     }
 
