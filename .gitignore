@@ -3,3 +3,6 @@ mac/build/
 *.dmg
 *.zip
 .DS_Store
+# Windows build outputs (build.ps1)
+bin/
+dist/
