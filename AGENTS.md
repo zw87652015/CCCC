@@ -6,3 +6,4 @@
   - Design sheet: `mac/build/CCCC.app/Contents/MacOS/CCCC --sheet /tmp/sheet.png` (`CCCC_LANG=en|zh`).
   - Debug log: run the bundle binary with `CCCC_DEBUG=1`.
   - Release (sign + notarize + staple, zip + dmg into `dist/`): `mac/release.sh` (uses the shared `ILM-notary` notarytool keychain profile; override with `NOTARY_PROFILE`).
+- CI: `.github/workflows/macos-intel.yml` builds an x86_64, ad-hoc-signed `CCCC.app` on `macos-15-intel` via `CCCC_ARCHS=x86_64 CCCC_SIGN_ID=- mac/build.sh` and uploads it as an artifact. `CCCC_ARCHS` (default `arm64 x86_64`) picks the architectures.

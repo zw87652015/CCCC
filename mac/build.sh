@@ -3,7 +3,8 @@ set -euo pipefail
 
 MAC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP="$MAC/build/CCCC.app"
-ARCHS=(--arch arm64 --arch x86_64)
+ARCHS=()
+for a in ${CCCC_ARCHS:-arm64 x86_64}; do ARCHS+=(--arch "$a"); done
 
 swift build -c release "${ARCHS[@]}" --package-path "$MAC"
 BIN="$(swift build -c release "${ARCHS[@]}" --package-path "$MAC" --show-bin-path)/CCCC"
