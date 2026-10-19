@@ -58,12 +58,15 @@ enum L {
     static var onClipboard: String { t("On your clipboard", "剪贴板里现在是") }
     static var emptyTitle: String { t("Clipboard is empty", "剪贴板是空的") }
     static var emptySub: String { t("Copy something and it shows up here.", "复制点什么，它就会出现在这里。") }
+    static var capsOn: String { t("Caps Lock ON", "大写锁定 ON") }
+    static var capsOff: String { t("Caps Lock OFF", "大写锁定 OFF") }
 
     static var menuShow: String { t("Show clipboard", "查看剪贴板") }
     static var menuPause: String { t("Pause", "暂停") }
     static var menuSound: String { t("Sound", "提示音") }
     static var menuStopSounds: String { t("Stop all sounds", "停止所有声音") }
     static var menuHint: String { t("Warn when nothing was copied", "没复制上时提醒我") }
+    static var menuCaps: String { t("Show Caps Lock changes", "切换大写锁定时提醒我") }
     static var menuInput: String { t("Allow Input Monitoring…", "授予“输入监控”权限…") }
     static var menuStartup: String { t("Open at Login", "登录时打开") }
     static var menuLanguage: String { t("Language", "语言") }

@@ -14,7 +14,7 @@ namespace Cccc
         internal static string Key = @"Software\CCCC";
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-        public bool Paused, Sound, FailHint = true, AutoUpdate = true, ShowSource = true, Simple;
+        public bool Paused, Sound, FailHint = true, CapsHint = true, AutoUpdate = true, ShowSource = true, Simple;
         public bool FullPalette, StayUntilClicked;
         public int SourceWhen = 1, SourceDetail = 1;
         public int ThemeMode, Palette, DurationMs = 1900, Position = 6, Scale = 100, TextScale = 100;
@@ -32,6 +32,7 @@ namespace Cccc
                 s.Paused = Flag(k, "Paused", s.Paused);
                 s.Sound = Flag(k, "Sound", s.Sound);
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
+                s.CapsHint = Flag(k, "CapsHint", s.CapsHint);
                 s.AutoUpdate = Flag(k, "AutoUpdate", s.AutoUpdate);
                 s.ShowSource = Flag(k, "ShowSource", s.ShowSource);
                 s.SourceWhen = Level(k, "SourceWhen", s.SourceWhen, 1);
@@ -70,6 +71,7 @@ namespace Cccc
                 k.SetValue("Paused", Paused ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
+                k.SetValue("CapsHint", CapsHint ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("AutoUpdate", AutoUpdate ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("ShowSource", ShowSource ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("SourceWhen", SourceWhen, RegistryValueKind.DWord);

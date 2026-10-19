@@ -80,7 +80,7 @@ namespace Cccc
         readonly ToggleButton[] spots = new ToggleButton[9];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple;
+        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple;
         ToggleButton chipNear, chipFree;
         Border monitorEl, miniCard;
         Grid spotsPanel;
@@ -170,6 +170,7 @@ namespace Cccc
             if (turnedOn) expanded = true;
             chkPause.IsChecked = set.Paused;
             chkWarn.IsChecked = set.FailHint;
+            chkCaps.IsChecked = set.CapsHint;
             chkStart.IsChecked = Settings.AutoStart;
             chkAuto.IsChecked = set.AutoUpdate;
             rbLang[set.Lang == "en" ? 1 : set.Lang == "zh" ? 2 : 0].IsChecked = true;
@@ -495,10 +496,12 @@ namespace Cccc
         {
             chkPause = Toggle();
             chkWarn = Toggle();
+            chkCaps = Toggle();
             chkStart = Toggle();
             chkAuto = Toggle();
             BindToggle(chkPause, v => set.Paused = v);
             BindToggle(chkWarn, v => set.FailHint = v);
+            BindToggle(chkCaps, v => set.CapsHint = v);
             BindToggle(chkStart, v => Settings.AutoStart = v);
             BindToggle(chkAuto, v => set.AutoUpdate = v);
             RadioButton[] lang;
@@ -509,6 +512,7 @@ namespace Cccc
             return PageOf(
                 SettingCard(L.MenuPause, L.HintPause, chkPause),
                 SettingCard(L.MenuHint, L.HintWarn, chkWarn),
+                SettingCard(L.MenuCaps, L.HintCaps, chkCaps),
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
                 SettingCard(L.MenuLanguage, L.HintLanguage, langSeg));
@@ -1118,6 +1122,7 @@ namespace Cccc
             {
                 case "pause": return chkPause;
                 case "warn": return chkWarn;
+                case "caps": return chkCaps;
                 case "auto": return chkAuto;
                 case "sound": return chkSound;
                 case "source": return chkSource;

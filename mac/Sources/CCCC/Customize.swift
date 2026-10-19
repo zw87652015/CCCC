@@ -56,7 +56,7 @@ final class Customize: NSObject, NSWindowDelegate {
     private var loading = false
     private var fontFamilies: [String] = []
 
-    private var chkPause: NSButton!, chkWarn: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
+    private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
     private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!
     private var popLang: NSPopUpButton!, popTheme: NSPopUpButton!, popPalette: NSPopUpButton!, popFont: NSPopUpButton!
     private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!, sldTrans: NSSlider!
@@ -242,10 +242,11 @@ final class Customize: NSObject, NSWindowDelegate {
     private func generalPage() -> NSView {
         chkPause = check(L.menuPause) { c in Prefs.paused = Customize.isOn(c) }
         chkWarn = check(L.menuHint) { c in Prefs.failHint = Customize.isOn(c) }
+        chkCaps = check(L.menuCaps) { c in Prefs.capsHint = Customize.isOn(c) }
         chkStart = check(L.menuStartup) { c in _ = try? Prefs.setAutoStart(Customize.isOn(c)) }
         chkAuto = check(L.menuAutoUpdate) { c in Prefs.autoUpdate = Customize.isOn(c) }
         popLang = popup([L.langSystem, "English", "中文"]) { c in Prefs.lang = ["auto", "en", "zh"][Customize.popIndex(c)] }
-        return page([chkPause, chkWarn, chkStart, chkAuto, row(L.menuLanguage, [popLang])])
+        return page([chkPause, chkWarn, chkCaps, chkStart, chkAuto, row(L.menuLanguage, [popLang])])
     }
 
     private func appearancePage() -> NSView {
@@ -394,6 +395,7 @@ final class Customize: NSObject, NSWindowDelegate {
         loading = true
         chkPause.state = Prefs.paused ? .on : .off
         chkWarn.state = Prefs.failHint ? .on : .off
+        chkCaps.state = Prefs.capsHint ? .on : .off
         chkStart.state = Prefs.autoStart ? .on : .off
         chkAuto.state = Prefs.autoUpdate ? .on : .off
         popLang.selectItem(at: Prefs.lang == "en" ? 1 : Prefs.lang == "zh" ? 2 : 0)

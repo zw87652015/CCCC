@@ -31,6 +31,10 @@ func userBusy() -> Bool {
     }
 }
 
+private func capsLockState() -> Bool {
+    CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
+}
+
 private func frontmostName() -> String? {
     NSWorkspace.shared.frontmostApplication?.localizedName
 }
@@ -42,6 +46,8 @@ private let keyTapCallback: CGEventTapCallBack = { _, type, event, refcon in
         if let tap = app.tap { CGEvent.tapEnable(tap: tap, enable: true) }
     } else if type == .keyDown {
         app.handleKeyDown(event)
+    } else if type == .flagsChanged {
+        app.handleCaps(event.flags.contains(.maskAlphaShift))
     }
     return Unmanaged.passUnretained(event)
 }
@@ -52,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private let trayIcon = Icons.trayTemplate()
-    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miStopSounds: NSMenuItem!, miHint: NSMenuItem!
+    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miStopSounds: NSMenuItem!, miHint: NSMenuItem!, miCaps: NSMenuItem!
     private var miSource: NSMenuItem!, miSourceOn: NSMenuItem!, miWhen: NSMenuItem!, miWhenAlways: NSMenuItem!
     private var miWhenAuto: NSMenuItem!, miDetail: NSMenuItem!, miDetails: [NSMenuItem] = []
     private var miInput: NSMenuItem!, miStartup: NSMenuItem!, miAutoUpdate: NSMenuItem!
@@ -77,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var changeFront: NSRunningApplication?
     private var lastSrc: Source?, lastSecret = false, srcSeq = -1
     private var checking = false
+    private var capsOn = capsLockState()
     private var declinedTag: String?
 
     init(updated: Bool) {
@@ -154,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miStopSounds = item(#selector(stopSoundsAction))
         miStopSounds.isEnabled = false
         miHint = item(#selector(toggleHint))
+        miCaps = item(#selector(toggleCaps))
         miSourceOn = item(#selector(toggleSource))
         miWhen = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         miWhen.isEnabled = false
@@ -192,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miUpdate = item(#selector(checkUpdateAction))
         miQuit = item(#selector(quitAction))
 
-        for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
+        for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miCaps, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
             menu.addItem(entry ?? .separator())
         }
         menu.delegate = self
@@ -218,6 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miSound.title = L.menuSound
         miStopSounds.title = L.menuStopSounds
         miHint.title = L.menuHint
+        miCaps.title = L.menuCaps
         miSource.title = L.menuSource
         miSourceOn.title = L.menuSourceOn
         miWhen.title = L.sourceWhen
@@ -236,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miPause.state = Prefs.paused ? .on : .off
         miSound.state = Prefs.sound ? .on : .off
         miHint.state = Prefs.failHint ? .on : .off
+        miCaps.state = Prefs.capsHint ? .on : .off
         miSourceOn.state = Prefs.showSource ? .on : .off
         miWhenAlways.state = Prefs.sourceWhen == 0 ? .on : .off
         miWhenAuto.state = Prefs.sourceWhen == 1 ? .on : .off
@@ -286,6 +296,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sync()
         updateTapRetry()
         if Prefs.failHint && !CGPreflightListenEventAccess() { requestInputMonitoring() }
+    }
+
+    @objc private func toggleCaps() {
+        Prefs.capsHint.toggle()
+        sync()
     }
 
     @objc private func requestInputAction() { requestInputMonitoring() }
@@ -369,7 +384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func stopSoundsAction() { sounds.stopAll() }
     @objc private func quitAction() { sounds.stopAll(); NSApp.terminate(nil) }
 
-    // MARK: Keyboard (listen-only event tap; records only that a copy/cut chord happened)
+    // MARK: Keyboard (listen-only event tap; records only that a copy/cut chord happened, plus Caps Lock state)
 
     private func updateTapRetry() {
         if Prefs.failHint && tap == nil {
@@ -391,7 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func tryTap() {
-        let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        let mask = CGEventMask(1 << CGEventType.keyDown.rawValue | 1 << CGEventType.flagsChanged.rawValue)
         guard let t = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
                                         eventsOfInterest: mask, callback: keyTapCallback,
                                         userInfo: Unmanaged.passUnretained(self).toOpaque()) else {
@@ -421,6 +436,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         onKey(packed: packed, seq: NSPasteboard.general.changeCount)
     }
 
+    // Fires only when the lock state actually flips; a short press that just switches input source does not.
+    fileprivate func handleCaps(_ on: Bool) {
+        if on == capsOn { return }
+        capsOn = on
+        dbg("caps: \(on ? "on" : "off")")
+        guard Prefs.capsHint, !Prefs.paused, !userBusy() else { return }
+        present(Content(kind: .info, title: on ? L.capsOn : L.capsOff), repeat: false)
+    }
+
     private func onKey(packed: Int, seq: Int) {
         keyKind = packed & 0xFF
         keyTick = ProcessInfo.processInfo.systemUptime
@@ -436,7 +460,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Clipboard
 
+    // Without Input Monitoring the tap is missing, so Caps Lock is polled here instead.
     private func pollClipboard() {
+        if !tapRunning { handleCaps(capsLockState()) }
         let cc = NSPasteboard.general.changeCount
         guard cc != polled else { return }
         polled = cc

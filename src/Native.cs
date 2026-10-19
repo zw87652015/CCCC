@@ -73,6 +73,7 @@ namespace Cccc
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder sb, int max);
         [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
+        [DllImport("user32.dll")] static extern short GetKeyState(int vk);
         [DllImport("user32.dll")] public static extern IntPtr SetWindowsHookEx(int id, HookProc fn, IntPtr hMod, uint threadId);
         [DllImport("user32.dll")] public static extern bool UnhookWindowsHookEx(IntPtr hook);
         [DllImport("user32.dll")] public static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
@@ -102,6 +103,7 @@ namespace Cccc
         [DllImport("uxtheme.dll", EntryPoint = "#136")] static extern void FlushMenuThemes();
 
         public static bool KeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
+        public static bool CapsLock() { return (GetKeyState(0x14) & 1) != 0; }
 
         public static string ClassOf(IntPtr hwnd)
         {

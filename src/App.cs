@@ -18,7 +18,7 @@ namespace Cccc
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
         readonly Timer updateTimer = new Timer { Interval = 10000 };
-        readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
+        readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
         readonly MenuItem[] miDetails = new MenuItem[4];
         readonly MenuItem miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miCustomize, miUpdate, miQuit;
         readonly SynchronizationContext ui;
@@ -31,7 +31,7 @@ namespace Cccc
         double lastTime = -99, lastFail = -99;
         int count, failCount, keyKind, keyTick;
         uint keySeq, lastSeq;
-        bool checking;
+        bool checking, capsOn = Native.CapsLock();
         string declinedTag;
         Source lastSrc;
         uint srcSeq;
@@ -63,6 +63,7 @@ namespace Cccc
             miSound = new MenuItem(L.MenuSound, delegate { set.Sound = !set.Sound; set.Save(); Sync(); if (set.Sound) sounds.Ok(); });
             miStopSounds = new MenuItem(L.MenuStopSounds, delegate { sounds.StopAll(); }) { Enabled = false };
             miHint = new MenuItem(L.MenuHint, delegate { set.FailHint = !set.FailHint; set.Save(); Sync(); });
+            miCaps = new MenuItem(L.MenuCaps, delegate { set.CapsHint = !set.CapsHint; set.Save(); Sync(); });
             miSourceOn = new MenuItem(L.MenuSourceOn, delegate { set.ShowSource = !set.ShowSource; set.Save(); Sync(); });
             miWhen = new MenuItem(L.SourceWhen) { Enabled = false };
             miWhenAlways = new MenuItem(L.SourceAlways, delegate { Pick(ref set.SourceWhen, 0); }) { RadioCheck = true };
@@ -92,7 +93,7 @@ namespace Cccc
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miSource, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miCaps, miSource, miStartup, miAutoUpdate, miLang,
                 new MenuItem("-"), miCustomize, miUpdate,
                 new MenuItem("-"), miQuit,
             });
@@ -179,6 +180,7 @@ namespace Cccc
             miSound.Text = L.MenuSound;
             miStopSounds.Text = L.MenuStopSounds;
             miHint.Text = L.MenuHint;
+            miCaps.Text = L.MenuCaps;
             miSource.Text = L.MenuSource;
             miSourceOn.Text = L.MenuSourceOn;
             miWhen.Text = L.SourceWhen;
@@ -198,6 +200,7 @@ namespace Cccc
             miPause.Checked = set.Paused;
             miSound.Checked = set.Sound;
             miHint.Checked = set.FailHint;
+            miCaps.Checked = set.CapsHint;
             miSourceOn.Checked = set.ShowSource;
             miWhenAlways.Checked = set.SourceWhen == 0;
             miWhenAuto.Checked = set.SourceWhen == 1;
@@ -224,12 +227,22 @@ namespace Cccc
 
         void OnKey(int packed, uint seq)
         {
+            if ((packed & 0xFF) == KeyHook.Caps) { OnCaps(); return; }
             keyKind = packed & 0xFF;
             keyTick = Environment.TickCount;
             if ((packed & KeyHook.Passthrough) != 0 || set.Paused || !set.FailHint) return;
             keySeq = seq;
             failCheck.Stop();
             failCheck.Start();
+        }
+
+        void OnCaps()
+        {
+            bool on = Native.CapsLock();
+            if (on == capsOn) return;
+            capsOn = on;
+            if (!set.CapsHint || set.Paused || Native.UserBusy()) return;
+            card.Show(new Content { Kind = Kind.Info, Title = on ? L.CapsOn : L.CapsOff }, false);
         }
 
         void OnClipboard()

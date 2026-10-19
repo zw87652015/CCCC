@@ -16,6 +16,10 @@ enum Prefs {
         get { (d.object(forKey: "FailHint") as? Bool) ?? true }
         set { d.set(newValue, forKey: "FailHint") }
     }
+    static var capsHint: Bool {
+        get { (d.object(forKey: "CapsHint") as? Bool) ?? true }
+        set { d.set(newValue, forKey: "CapsHint") }
+    }
     static var autoUpdate: Bool {
         get { (d.object(forKey: "AutoUpdate") as? Bool) ?? true }
         set { d.set(newValue, forKey: "AutoUpdate") }

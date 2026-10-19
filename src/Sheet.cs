@@ -69,6 +69,7 @@ namespace Cccc
                 Row(new Content { Kind = Kind.Cut, Title = L.Cut, Meta = L.Items(3), Sub = "report.pdf, photo.png, 笔记.txt" }, false, 1.2),
                 Row(new Content { Kind = Kind.Fail, Title = L.NothingCopied, Sub = L.StillHolding + text, Count = 2 }, true, 1.2),
                 Row(new Content { Kind = Kind.Info, Title = L.ReadyTitle, Sub = L.ReadySub }, false, 1.2),
+                Row(new Content { Kind = Kind.Info, Title = L.CapsOn }, false, 1.2),
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text, SrcIcon = appIcon, SrcText = "Google Chrome · github.com", SrcLine = true }, false, 1.2),
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Link, Sub = "github.com/microsoft/terminal/issues/1234", SrcIcon = appIcon }, false, 1.2),
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text, SrcIcon = appIcon, SrcText = "Visual Studio Code · github.com · Pull request #1234: Add customizable source display", SrcLine = true }, false, 1.2),

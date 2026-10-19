@@ -56,12 +56,15 @@ namespace Cccc
         public static string OnClipboard { get { return T("On your clipboard", "剪贴板里现在是"); } }
         public static string EmptyTitle { get { return T("Clipboard is empty", "剪贴板是空的"); } }
         public static string EmptySub { get { return T("Copy something and it shows up here.", "复制点什么，它就会出现在这里。"); } }
+        public static string CapsOn { get { return T("Caps Lock ON", "大写锁定 ON"); } }
+        public static string CapsOff { get { return T("Caps Lock OFF", "大写锁定 OFF"); } }
 
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }
         public static string MenuSound { get { return T("Sound", "提示音"); } }
         public static string MenuStopSounds { get { return T("Stop all sounds", "停止所有声音"); } }
         public static string MenuHint { get { return T("Warn when nothing was copied", "没复制上时提醒我"); } }
+        public static string MenuCaps { get { return T("Show Caps Lock changes", "切换大写锁定时提醒我"); } }
         public static string MenuStartup { get { return T("Start with Windows", "开机启动"); } }
         public static string MenuLanguage { get { return T("Language", "语言"); } }
         public static string MenuQuit { get { return T("Quit", "退出"); } }
@@ -159,6 +162,7 @@ namespace Cccc
         public static string SizeTitle { get { return T("Size", "大小"); } }
         public static string HintPause { get { return T("Stop noticing copies for now", "暂时不监听复制"); } }
         public static string HintWarn { get { return T("Warn when Ctrl+C copies nothing", "Ctrl+C 没复制上时提醒"); } }
+        public static string HintCaps { get { return T("Show a card when Caps Lock turns on or off", "大写锁定开启或关闭时弹出卡片"); } }
         public static string HintStartup { get { return T("Run CCCC when you sign in", "登录 Windows 时自动运行"); } }
         public static string HintAutoUpdate { get { return T("Check GitHub for new releases", "在 GitHub 上检查新版本"); } }
         public static string HintLanguage { get { return T("Follow Windows, or pick a language", "跟随系统，或选择语言"); } }

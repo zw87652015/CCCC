@@ -7,3 +7,6 @@
   - Debug log: run the bundle binary with `CCCC_DEBUG=1`.
   - Release (sign + notarize + staple, zip + dmg into `dist/`): `mac/release.sh` (uses the shared `ILM-notary` notarytool keychain profile; override with `NOTARY_PROFILE`).
   - `CCCC_ARCHS` (default `arm64 x86_64`) picks the architectures; `CCCC_SIGN_ID=-` forces ad-hoc signing.
+
+# Rules
+- Reply in precise and simple language. As simple as possible.

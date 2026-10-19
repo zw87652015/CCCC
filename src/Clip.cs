@@ -272,10 +272,11 @@ namespace Cccc
     }
 
     // Low-level keyboard hook on its own thread so rendering never delays system input.
-    // It only notes *that* a copy/cut chord was pressed, plus the clipboard sequence number at that instant.
+    // It only notes *that* a copy/cut chord was pressed, plus the clipboard sequence number at that instant,
+    // and that Caps Lock was released (the toggle has flipped by then).
     sealed class KeyHook
     {
-        public const int Copy = 1, CutKey = 2, Passthrough = 0x100;
+        public const int Copy = 1, CutKey = 2, Caps = 3, Passthrough = 0x100;
 
         static readonly string[] Shells =
         {
@@ -316,7 +317,9 @@ namespace Cccc
             if (code >= 0)
             {
                 int msg = (int)wParam, vk = Marshal.ReadInt32(lParam);
-                if (vk == 0x43 || vk == 0x58 || vk == 0x2D)
+                if (vk == 0x14 && (msg == 0x101 || msg == 0x105))
+                    Native.PostMessage(target, Native.WM_APP_KEY, (IntPtr)Caps, IntPtr.Zero);
+                else if (vk == 0x43 || vk == 0x58 || vk == 0x2D)
                 {
                     bool down = msg == 0x100 || msg == 0x104;
                     bool held = vk == 0x43 ? cHeld : vk == 0x58 ? xHeld : insHeld;
