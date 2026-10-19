@@ -68,6 +68,7 @@ final class Card {
     private var shown = false, repeatHit = false, hoverArmed = false, slideDown = false
     private var lastRoll = -1
     private var slot = CGPoint.zero
+    private var placeSig = ""
     private var vis = 0.0, last = 0.0, deadline = 0.0, duration = 2.0
     private var tEvent = -9.0, tPop = -9.0, tBump = -9.0, tShake = -9.0, tText = -9.0, tTitle = -9.0
 
@@ -183,7 +184,7 @@ final class Card {
     func show(_ c: Content, repeat rep: Bool) {
         let t = now
         let fresh = !shown
-        if fresh { prepare() }
+        if fresh || placeSig != Card.placeSig() { prepare() }
         let oldTitle = cur?.title
         cur = c
         repeatHit = rep
@@ -220,7 +221,12 @@ final class Card {
         duration = 1.9; deadline = t + duration; visTarget = 1
     }
 
+    private static func placeSig() -> String {
+        "\(Prefs.position)|\(Prefs.scale)|\(Prefs.textScale)|\(Prefs.fontFamily ?? "")|\(Prefs.simple)"
+    }
+
     private func prepare() {
+        placeSig = Card.placeSig()
         apply()
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]

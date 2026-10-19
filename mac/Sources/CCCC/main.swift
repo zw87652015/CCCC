@@ -15,6 +15,12 @@ if verb == "--sheet" && hasArg {
     exit(0)
 }
 
+if verb == "--customize-shot" && hasArg {
+    _ = NSApplication.shared
+    Customize.shot(args[2])
+    exit(0)
+}
+
 if verb == "--updated", hasArg, let pid = Int32(args[2]) {
     Updater.waitForExit(pid)
 }

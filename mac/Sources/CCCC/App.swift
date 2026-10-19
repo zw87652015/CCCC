@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var miCustomize: NSMenuItem!, miUpdate: NSMenuItem!, miQuit: NSMenuItem!
 
     private let sounds = Sounds()
+    private lazy var sampleIcon: CGImage = Icons.app(32)
     private var customize: Customize?
     private(set) var tap: CFMachPort?
     private var tapRetry: Timer?
@@ -358,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self?.sounds.load(okFile: Prefs.soundOkFile, failFile: Prefs.soundFailFile)
                     self?.sync()
                 },
-                onShowSample: { [weak self] in self?.showSample() },
+                onShowSample: { [weak self] failed in self?.showSample(failed: failed) },
                 onTest: { [weak self] ok in
                     if ok { self?.sounds.playOk() } else { self?.sounds.playNo() }
                 },
@@ -367,14 +368,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         customize?.show()
     }
 
-    private func showSample() {
+    private func showSample(failed: Bool) {
         let text = L.zh ? "放心复制：让 Ctrl+C 也有看得见的成功" : "The quick brown fox jumps over the lazy dog"
-        let c = Content(kind: .copied, title: L.again[0], meta: L.chars(text.count), sub: text)
+        let c: Content
         let src = Source()
-        src.app = "Google Chrome"
-        src.site = "github.com"
-        src.title = "GitHub"
-        src.icon = Icons.app(32)
+        src.icon = sampleIcon
+        if failed {
+            c = Content(kind: .fail, title: L.nothingCopied, sub: L.stillHolding + text)
+            src.app = "Microsoft Word"
+        } else {
+            c = Content(kind: .copied, title: L.again[0], meta: L.chars(text.count), sub: text)
+            src.app = "Google Chrome"
+            src.site = "github.com"
+            src.title = "GitHub"
+        }
         applySource(c, src, show: Prefs.showSource)
         present(c, repeat: false)
     }

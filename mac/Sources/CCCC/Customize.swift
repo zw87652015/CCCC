@@ -26,6 +26,10 @@ private final class SpotView: NSView {
     }
 }
 
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 private struct ColourRow {
     let well: NSColorWell
     let reset: NSButton
@@ -47,11 +51,9 @@ private struct SoundRow {
 final class Customize: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let onChange: () -> Void
-    private let onShowSample: () -> Void
+    private let onShowSample: (Bool) -> Void
     private let onTest: (Bool) -> Void
     private let onClose: () -> Void
-    private let card = Card()
-    private lazy var sampleIcon: CGImage = Icons.app(32)
     private var acts: [Act] = []
     private var loading = false
     private var fontFamilies: [String] = []
@@ -67,19 +69,19 @@ final class Customize: NSObject, NSWindowDelegate {
     private var rbDetail: [NSButton] = []
     private var colours: [ColourRow] = []
     private var sounds: [SoundRow] = []
-    private var previewView: NSImageView!
+    private var tabsView: NSTabView!
 
-    init(onChange: @escaping () -> Void, onShowSample: @escaping () -> Void, onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void) {
+    init(onChange: @escaping () -> Void, onShowSample: @escaping (Bool) -> Void, onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void) {
         self.onChange = onChange
         self.onShowSample = onShowSample
         self.onTest = onTest
         self.onClose = onClose
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 880, height: 600),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
         super.init()
         window.title = L.customizeTitle
-        window.contentMinSize = NSSize(width: 820, height: 560)
+        window.contentMinSize = NSSize(width: 520, height: 480)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
@@ -103,13 +105,35 @@ final class Customize: NSObject, NSWindowDelegate {
     }
 
     private func wire(_ c: NSControl, _ f: @escaping (NSControl) -> Void) {
-        let a = act { [weak self] in
-            guard let s = self, !s.loading else { return }
-            f(c)
-            s.changed()
-        }
+        let a = act { [weak self] in self?.edit { f(c) } }
         c.target = a
         c.action = #selector(Act.fire(_:))
+    }
+
+    // The copied card mirrors almost every display setting; warn colour and the fail hint only affect the
+    // failed card; everything else (pause, autostart, auto-update, sound files) shows nothing.
+    private static func sigShared() -> String {
+        let parts: [Any?] = [
+            Prefs.themeMode, Prefs.palette, Prefs.okColor, Prefs.bgColor, Prefs.borderColor, Prefs.titleColor,
+            Prefs.subColor, Prefs.metaColor, Prefs.fullPalette, Prefs.fontFamily, Prefs.scale, Prefs.textScale,
+            Prefs.position, Prefs.durationMs, Prefs.stayUntilClicked, Prefs.showSource, Prefs.sourceWhen,
+            Prefs.sourceDetail, Prefs.simple, Prefs.transparency, Prefs.lang,
+        ]
+        return parts.map { String(describing: $0) }.joined(separator: "|")
+    }
+
+    private static func sigFailed() -> String {
+        String(describing: Prefs.warnColor) + "|" + String(describing: Prefs.failHint)
+    }
+
+    // Every user change: apply through `changed`, re-sync the window, then pop the real card on screen.
+    private func edit(_ f: () -> Void) {
+        guard !loading else { return }
+        let shared = Customize.sigShared(), failed = Customize.sigFailed()
+        f()
+        changed()
+        if Customize.sigShared() != shared { onShowSample(false) }
+        else if Customize.sigFailed() != failed, Prefs.failHint { onShowSample(true) }
     }
 
     private func changed() {
@@ -184,29 +208,13 @@ final class Customize: NSObject, NSWindowDelegate {
 
     private func buildContent() -> NSView {
         let tabs = NSTabView()
+        tabs.translatesAutoresizingMaskIntoConstraints = false
         tabs.addTabViewItem(tab(L.tabGeneral, generalPage()))
         tabs.addTabViewItem(tab(L.tabAppearance, appearancePage()))
         tabs.addTabViewItem(tab(L.tabBehavior, behaviorPage()))
         tabs.addTabViewItem(tab(L.tabSound, soundPage()))
         tabs.addTabViewItem(tab(L.tabSource, sourcePage()))
-        tabs.widthAnchor.constraint(greaterThanOrEqualToConstant: 460).isActive = true
-
-        previewView = NSImageView()
-        previewView.imageScaling = .scaleProportionallyDown
-        previewView.imageAlignment = .alignCenter
-        let show = NSButton(title: L.showOnScreen, target: nil, action: nil)
-        show.target = act { [weak self] in self?.onShowSample() }
-        show.action = #selector(Act.fire(_:))
-        let box = NSBox()
-        box.title = L.previewTitle
-        box.contentView = column([previewView, show], spacing: 12)
-        box.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        let upper = NSStackView(views: [tabs, box])
-        upper.orientation = .horizontal
-        upper.alignment = .top
-        upper.spacing = 16
-        upper.distribution = .fill
+        tabsView = tabs
 
         let reset = NSButton(title: L.resetDefaults, target: nil, action: nil)
         reset.target = act { [weak self] in self?.resetAll() }
@@ -217,17 +225,19 @@ final class Customize: NSObject, NSWindowDelegate {
         let bottom = NSStackView(views: [reset, NSView(), close])
         bottom.orientation = .horizontal
         bottom.distribution = .fill
+        bottom.translatesAutoresizingMaskIntoConstraints = false
 
-        let root = column([upper, bottom], spacing: 14)
-        root.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 14, right: 16)
-        root.translatesAutoresizingMaskIntoConstraints = false
         let container = NSView()
-        container.addSubview(root)
+        container.addSubview(tabs)
+        container.addSubview(bottom)
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            root.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            root.topAnchor.constraint(equalTo: container.topAnchor),
-            root.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            tabs.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            tabs.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            tabs.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            bottom.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            bottom.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            bottom.topAnchor.constraint(equalTo: tabs.bottomAnchor, constant: 14),
+            bottom.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -14),
         ])
         return container
     }
@@ -235,7 +245,25 @@ final class Customize: NSObject, NSWindowDelegate {
     private func tab(_ title: String, _ content: NSView) -> NSTabViewItem {
         let item = NSTabViewItem(identifier: nil)
         item.label = title
-        item.view = content
+        let scroll = NSScrollView()
+        scroll.borderType = .noBorder
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.autohidesScrollers = true
+        content.translatesAutoresizingMaskIntoConstraints = false
+        let doc = FlippedView()
+        doc.translatesAutoresizingMaskIntoConstraints = false
+        doc.addSubview(content)
+        scroll.documentView = doc
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
+            content.topAnchor.constraint(equalTo: doc.topAnchor),
+            content.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
+            doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+        ])
+        item.view = scroll
         return item
     }
 
@@ -283,7 +311,7 @@ final class Customize: NSObject, NSWindowDelegate {
         sldTrans.allowsTickMarkValuesOnly = true
         lblTrans = NSTextField(labelWithString: "")
 
-        var rows: [NSView] = [popTheme, popPalette, ok, warn, chkFull]
+        var rows: [NSView] = [row(L.themeTitle, [popTheme]), row(L.paletteTitle, [popPalette]), ok, warn, chkFull]
         rows += extra
         rows.append(row(L.cardSize, [sldSize, lblSize]))
         rows.append(row(L.fontTitle, [popFont]))
@@ -325,9 +353,9 @@ final class Customize: NSObject, NSWindowDelegate {
         for b in grid { screen.addSubview(b) }
         rbNear = radio(L.posNear) { _ in Prefs.position = 9 }
         rbRandom = radio(L.posRandom) { _ in Prefs.position = 10 }
-        let box = NSBox()
-        box.title = L.positionTitle
-        box.contentView = column([screen, rbNear, rbRandom])
+        let head = NSTextField(labelWithString: L.positionTitle)
+        head.font = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
+        let box = column([head, screen, rbNear, rbRandom])
 
         chkStay = check(L.stayUntilClicked) { c in Prefs.stayUntilClicked = Customize.isOn(c) }
         sldDuration = slider(5, 100) { c in Prefs.durationMs = Int(round((c as! NSSlider).doubleValue)) * 100 }
@@ -370,8 +398,7 @@ final class Customize: NSObject, NSWindowDelegate {
             reload()
             return
         }
-        set(url.path)
-        changed()
+        edit { set(url.path) }
     }
 
     private func sourcePage() -> NSView {
@@ -437,7 +464,6 @@ final class Customize: NSObject, NSWindowDelegate {
         }
         loading = false
         updateLabels()
-        refreshPreview()
     }
 
     private func updateLabels() {
@@ -454,53 +480,68 @@ final class Customize: NSObject, NSWindowDelegate {
         alert.addButton(withTitle: L.yes)
         alert.addButton(withTitle: L.no)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        Prefs.resetDisplay()
-        changed()
+        edit { Prefs.resetDisplay() }
     }
 
-    private func sample(fail: Bool) -> Content {
-        let text = L.zh ? "放心复制：让 Ctrl+C 也有看得见的成功" : "The quick brown fox jumps over the lazy dog"
-        let c = fail
-            ? Content(kind: .fail, title: L.nothingCopied, sub: L.stillHolding + text)
-            : Content(kind: .copied, title: L.again[0], meta: L.chars(text.count), sub: text)
-        if Prefs.showSource {
-            let src = Source()
-            src.app = "Google Chrome"
-            src.site = "github.com"
-            src.title = "GitHub"
-            src.icon = sampleIcon
-            c.srcIcon = sampleIcon
-            c.srcText = Sources.text(src, detail: Prefs.sourceDetail, secret: false)
-            c.srcLine = !c.srcText.isEmpty && Prefs.sourceDetail >= 2
+    // MARK: Screenshot verb
+
+    static func shot(_ dir: String) {
+        let c = Customize(onChange: {}, onShowSample: { _ in }, onTest: { _ in }, onClose: {})
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let win = c.window
+        let sizes: [(String, NSSize)] = [
+            ("", NSSize(width: 560, height: 600)),
+            ("-min", NSSize(width: 520, height: 480)),
+            ("-big", NSSize(width: 900, height: 750)),
+        ]
+        for i in 0..<c.tabsView.numberOfTabViewItems {
+            c.tabsView.selectTabViewItem(at: i)
+            for (suffix, size) in sizes {
+                win.setContentSize(size)
+                win.contentView?.layoutSubtreeIfNeeded()
+                c.render(win.contentView!, to: "\(dir)/tab\(i)\(suffix).png")
+                c.logFrames("tab\(i)\(suffix)")
+            }
         }
-        return c
+        // One extra: appearance tab with the full palette forced on.
+        let had = Prefs.fullPalette
+        Prefs.fullPalette = true
+        c.reload()
+        c.tabsView.selectTabViewItem(at: 1)
+        win.setContentSize(NSSize(width: 560, height: 600))
+        win.contentView?.layoutSubtreeIfNeeded()
+        c.render(win.contentView!, to: "\(dir)/tab1-full.png")
+        c.logFrames("tab1-full")
+        Prefs.fullPalette = had
     }
 
-    // Both stills stacked, rendered through the real card drawing at the chosen size.
-    private func refreshPreview() {
-        card.apply()
-        let items = [sample(fail: false), sample(fail: true)]
-        let s = card.sc
-        let w = card.canvasW * s, h = card.canvasH * s
-        let gap: CGFloat = 8
-        let total = h * CGFloat(items.count) + gap * CGFloat(items.count - 1)
+    private func render(_ view: NSView, to path: String) {
+        view.layoutSubtreeIfNeeded()
+        let b = view.bounds
         let scale: CGFloat = 2
-        let ctx = Raster.context(Int(w * scale), Int(total * scale))
-        ctx.scaleBy(x: scale, y: scale)
-        ctx.translateBy(x: 0, y: total)
-        ctx.scaleBy(x: 1, y: -1)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: true)
-        for (i, c) in items.enumerated() {
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: (h + gap) * CGFloat(i))
-            card.still(c, repeat: false, age: 1.2)
-            card.render(ctx, now: 100)
-            ctx.restoreGState()
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                         pixelsWide: max(1, Int(b.width * scale)),
+                                         pixelsHigh: max(1, Int(b.height * scale)),
+                                         bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return }
+        rep.size = b.size
+        view.cacheDisplay(in: b, to: rep)
+        if let png = rep.representation(using: .png, properties: [:]) {
+            try? png.write(to: URL(fileURLWithPath: path))
         }
-        NSGraphicsContext.restoreGraphicsState()
-        if let img = ctx.makeImage() {
-            previewView.image = NSImage(cgImage: img, size: NSSize(width: w, height: total))
+    }
+
+    private func logFrames(_ tag: String) {
+        func err(_ s: String) { FileHandle.standardError.write(Data(s.utf8)) }
+        err("[shot] \(tag) window=\(window.frame.size) tabs=\(tabsView.frame)\n")
+        func walk(_ v: NSView) {
+            if v.hasAmbiguousLayout {
+                err("[shot] ambiguous: \(type(of: v)) frame=\(v.frame)\n")
+            }
+            for s in v.subviews { walk(s) }
         }
+        if let cv = window.contentView { walk(cv) }
     }
 }

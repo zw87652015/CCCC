@@ -114,11 +114,9 @@ enum L {
     static var tabBehavior: String { t("Behavior", "行为") }
     static var tabSound: String { t("Sound", "声音") }
     static var tabSource: String { t("Source", "来源") }
-    static var showOnScreen: String { t("Show on screen", "在屏幕上预览") }
     static var resetDefaults: String { t("Reset to defaults", "恢复默认") }
     static var resetConfirm: String { t("Reset the card, position, sound and source settings to defaults?", "要将卡片、位置、声音和来源设置恢复为默认吗？") }
     static var closeWindow: String { t("Close", "关闭") }
-    static var previewTitle: String { t("Preview", "预览") }
     static var themeTitle: String { t("Theme", "主题") }
     static var themeSystem: String { t("System", "跟随系统") }
     static var themeLight: String { t("Light", "浅色") }
