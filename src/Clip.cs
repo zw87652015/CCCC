@@ -327,7 +327,9 @@ namespace Cccc
                 {
                     bool down = msg == 0x100 || msg == 0x104;
                     bool held = vk == 0x43 ? cHeld : vk == 0x58 ? xHeld : insHeld;
-                    if (down && !held && Chord(vk)) Fire(vk == 0x58 ? CutKey : Copy);
+                    // Selection tools (translate/search bubbles) fake Ctrl+C, then restore the old clipboard.
+                    bool injected = (Marshal.ReadInt32(lParam, 8) & 0x10) != 0;
+                    if (down && !held && !injected && Chord(vk)) Fire(vk == 0x58 ? CutKey : Copy);
                     if (vk == 0x43) cHeld = down; else if (vk == 0x58) xHeld = down; else insHeld = down;
                 }
             }

@@ -506,11 +506,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let src = detectSource(c, atCopy: true, front: changeFront)
         let now = card.now
         let keyed = !tapRunning || (keyKind != 0 && now - keyTick < 1.5)
-        if let sig = c.sig, sig == lastSig, !keyed {
+        let owner: String?
+        if let b = c.sourceBundle, !b.isEmpty { owner = b }
+        else { owner = c.remote ? nil : changeFront?.bundleIdentifier }
+        let ignored = Prefs.ignores(owner)
+        if (c.sig != nil && c.sig == lastSig && !keyed) || ignored {
+            lastSig = c.sig
             lastHold = c.hold
             srcSeq = seq; lastSrc = src
             lastSecret = c.secret
-            dbg("clipboard: ignored (same content, no copy key)")
+            keyKind = 0
+            dbg(ignored ? "clipboard: ignored (ignored app)" : "clipboard: ignored (same content, no copy key)")
             return
         }
 
@@ -540,6 +546,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         if userBusy() { dbg("fail check: ignored (screen locked or shielded)"); return }
+        if Prefs.ignores(NSWorkspace.shared.frontmostApplication?.bundleIdentifier) {
+            dbg("fail check: ignored (ignored app)")
+            return
+        }
         let now = card.now
         let rep = now - lastFail < 6
         failCount = rep ? failCount + 1 : 1

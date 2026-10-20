@@ -132,6 +132,17 @@ enum Prefs {
         get { text("SoundFailFile") }
         set { d.set(newValue, forKey: "SoundFailFile") }
     }
+    static var ignoreApps: [String] {
+        get { (d.stringArray(forKey: "IgnoreApps") ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } }
+        set {
+            if newValue.isEmpty { d.removeObject(forKey: "IgnoreApps") } else { d.set(newValue, forKey: "IgnoreApps") }
+        }
+    }
+
+    static func ignores(_ bundle: String?) -> Bool {
+        guard let b = bundle, !b.isEmpty else { return false }
+        return ignoreApps.contains { $0.caseInsensitiveCompare(b) == .orderedSame }
+    }
 
     static func resetDisplay() {
         themeMode = 0; palette = 0; fullPalette = false

@@ -174,6 +174,11 @@ namespace Cccc
         public static string SizeTitle { get { return T("Size", "大小"); } }
         public static string HintPause { get { return T("Stop noticing copies for now", "暂时不监听复制"); } }
         public static string HintWarn { get { return T("Warn when Ctrl+C copies nothing", "Ctrl+C 没复制上时提醒"); } }
+        public static string IgnoreApps { get { return T("Ignored apps", "忽略的应用"); } }
+        public static string HintIgnore { get { return T("No card, sound or warning when copying in these apps", "在这些应用里复制时不弹卡片、不响、不提醒"); } }
+        public static string AddApp { get { return T("Add app…", "添加应用…"); } }
+        public static string Remove { get { return T("Remove", "移除"); } }
+        public static string ProgramFilter { get { return T("Programs (*.exe)|*.exe", "程序 (*.exe)|*.exe"); } }
         public static string HintCaps { get { return T("Show a card when Caps Lock turns on or off", "大写锁定开启或关闭时弹出卡片"); } }
         public static string HintStartup { get { return T("Run CCCC when you sign in", "登录 Windows 时自动运行"); } }
         public static string HintAutoUpdate { get { return T("Check GitHub for new releases", "在 GitHub 上检查新版本"); } }

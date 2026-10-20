@@ -167,6 +167,10 @@ enum L {
     static var testSound: String { t("Test", "试听") }
     static var langSystem: String { t("System", "跟随系统") }
     static var noFile: String { t("No file", "无文件") }
+    static var ignoreApps: String { t("Ignored apps", "忽略的应用") }
+    static var hintIgnore: String { t("No card, sound or warning when copying in these apps", "在这些应用里复制时不弹卡片、不响、不提醒") }
+    static var addApp: String { t("Add app…", "添加应用…") }
+    static var remove: String { t("Remove", "移除") }
 
     static var tip: String { t("CCCC · copy with confidence", "CCCC · 放心复制") }
     static var tipPaused: String { t("CCCC · paused", "CCCC · 已暂停") }

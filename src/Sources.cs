@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace Cccc
 {
-    sealed class Source { public string App, Site, Title; public Bitmap Icon; public bool Obvious; }
+    sealed class Source { public string App, Site, Title, Exe; public Bitmap Icon; public bool Obvious; }
 
     static class Sources
     {
@@ -32,8 +32,41 @@ namespace Cccc
 
             string raw = src.Obvious ? Window(Native.GetAncestor(fg, 2)) : MainTitle(pid);
             string exe = info != null ? info.Exe : null;
+            src.Exe = exe;
             src.Title = StripApp(raw, src.App, exe);
             return src;
+        }
+
+        public static string ForegroundExe()
+        {
+            uint pid = PidOf(Native.GetForegroundWindow());
+            if (pid == 0) return null;
+            AppInfo info = Info(pid);
+            return info != null ? info.Exe : null;
+        }
+
+        public static List<KeyValuePair<string, string>> Seen()
+        {
+            string self = Process.GetCurrentProcess().ProcessName;
+            var byExe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (AppInfo info in apps.Values)
+                if (info.Exe != null && !byExe.ContainsKey(info.Exe)
+                    && !string.Equals(info.Exe, self, StringComparison.OrdinalIgnoreCase))
+                    byExe[info.Exe] = NameOf(info);
+            var list = new List<KeyValuePair<string, string>>();
+            foreach (var kv in byExe) list.Add(new KeyValuePair<string, string>(kv.Key, kv.Value));
+            list.Sort(delegate (KeyValuePair<string, string> a, KeyValuePair<string, string> b)
+            {
+                return string.Compare(a.Value, b.Value, StringComparison.CurrentCultureIgnoreCase);
+            });
+            return list;
+        }
+
+        public static string NameFor(string exe)
+        {
+            foreach (AppInfo info in apps.Values)
+                if (string.Equals(info.Exe, exe, StringComparison.OrdinalIgnoreCase)) return NameOf(info);
+            return exe;
         }
 
         public static string OwnerApp()

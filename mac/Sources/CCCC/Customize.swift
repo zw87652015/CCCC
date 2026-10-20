@@ -48,7 +48,7 @@ private struct SoundRow {
 }
 
 // Settings window. Every control writes straight into Prefs and calls onChange; `loading` blocks those writes while reload() pushes values back.
-final class Customize: NSObject, NSWindowDelegate {
+final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private let window: NSWindow
     private let onChange: () -> Void
     private let onShowSample: (Bool) -> Void
@@ -56,12 +56,15 @@ final class Customize: NSObject, NSWindowDelegate {
     private let onTest: (Bool) -> Void
     private let onClose: () -> Void
     private var acts: [Act] = []
+    private var ignoreActs: [Act] = []
     private var loading = false
     private var fontFamilies: [String] = []
 
     private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
     private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!
     private var popLang: NSPopUpButton!, popTheme: NSPopUpButton!, popPalette: NSPopUpButton!, popFont: NSPopUpButton!
+    private var popIgnore: NSPopUpButton!
+    private var ignoreList: NSStackView!
     private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!, sldTrans: NSSlider!, sldCapsW: NSSlider!, sldCapsH: NSSlider!
     private var lblSize: NSTextField!, lblText: NSTextField!, lblDuration: NSTextField!, lblTrans: NSTextField!, lblCapsW: NSTextField!, lblCapsH: NSTextField!
     private var spots: [NSButton] = []
@@ -284,7 +287,102 @@ final class Customize: NSObject, NSWindowDelegate {
         chkStart = check(L.menuStartup) { c in _ = try? Prefs.setAutoStart(Customize.isOn(c)) }
         chkAuto = check(L.menuAutoUpdate) { c in Prefs.autoUpdate = Customize.isOn(c) }
         popLang = popup([L.langSystem, "English", "中文"]) { c in Prefs.lang = ["auto", "en", "zh"][Customize.popIndex(c)] }
-        return page([chkPause, chkWarn, chkStart, chkAuto, row(L.menuLanguage, [popLang])])
+        popIgnore = NSPopUpButton(frame: .zero, pullsDown: true)
+        popIgnore.addItem(withTitle: L.addApp)
+        popIgnore.menu?.delegate = self
+        let pickAct = act { [weak self] in self?.pickIgnore() }
+        popIgnore.target = pickAct
+        popIgnore.action = #selector(Act.fire(_:))
+        let hintIgnore = NSTextField(labelWithString: L.hintIgnore)
+        hintIgnore.textColor = .secondaryLabelColor
+        hintIgnore.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        ignoreList = column([], spacing: 6)
+        return page([chkPause, chkWarn, row(L.ignoreApps, [popIgnore]), hintIgnore, ignoreList, chkStart, chkAuto, row(L.menuLanguage, [popLang])])
+    }
+
+    // MARK: Ignored apps
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === popIgnore?.menu else { return }
+        menu.removeAllItems()
+        menu.addItem(withTitle: L.addApp, action: nil, keyEquivalent: "")
+        var seen = Set<String>()
+        var items: [NSMenuItem] = []
+        for app in NSWorkspace.shared.runningApplications {
+            guard app.activationPolicy == .regular, let id = app.bundleIdentifier,
+                  app.processIdentifier != getpid(), !Prefs.ignores(id), !seen.contains(id.lowercased()) else { continue }
+            seen.insert(id.lowercased())
+            let i = NSMenuItem(title: app.localizedName ?? id, action: nil, keyEquivalent: "")
+            i.representedObject = id
+            if let icon = app.icon, let img = icon.copy() as? NSImage {
+                img.size = NSSize(width: 16, height: 16)
+                i.image = img
+            }
+            items.append(i)
+        }
+        items.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        for i in items { menu.addItem(i) }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: L.browse, action: nil, keyEquivalent: "")
+    }
+
+    private func pickIgnore() {
+        guard let item = popIgnore.selectedItem, item !== popIgnore.item(at: 0) else { return }
+        guard let id = item.representedObject as? String else {
+            chooseApp()
+            return
+        }
+        addIgnore(id)
+    }
+
+    private func addIgnore(_ id: String) {
+        guard !Prefs.ignores(id) else { return }
+        edit { Prefs.ignoreApps = Prefs.ignoreApps + [id] }
+    }
+
+    private func chooseApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url, let id = Bundle(url: url)?.bundleIdentifier else {
+            reload()
+            return
+        }
+        addIgnore(id)
+    }
+
+    private func rebuildIgnoreList() {
+        ignoreActs = []
+        for v in ignoreList.arrangedSubviews {
+            ignoreList.removeArrangedSubview(v)
+            v.removeFromSuperview()
+        }
+        for id in Prefs.ignoreApps {
+            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
+            var views: [NSView] = []
+            if let url = url, let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as? NSImage {
+                icon.size = NSSize(width: 16, height: 16)
+                views.append(NSImageView(image: icon))
+            }
+            views.append(NSTextField(labelWithString: url.map { FileManager.default.displayName(atPath: $0.path) } ?? id))
+            let bundle = NSTextField(labelWithString: id)
+            bundle.textColor = .secondaryLabelColor
+            views.append(bundle)
+            let remove = NSButton(title: L.remove, target: nil, action: nil)
+            remove.bezelStyle = .inline
+            let a = Act { [weak self] in
+                DispatchQueue.main.async {
+                    self?.edit { Prefs.ignoreApps = Prefs.ignoreApps.filter { $0.caseInsensitiveCompare(id) != .orderedSame } }
+                }
+            }
+            ignoreActs.append(a)
+            remove.target = a
+            remove.action = #selector(Act.fire(_:))
+            views.append(remove)
+            ignoreList.addArrangedSubview(row(nil, views))
+        }
     }
 
     private func appearancePage() -> NSView {
@@ -548,6 +646,7 @@ final class Customize: NSObject, NSWindowDelegate {
             c.reset.isEnabled = c.get() != nil
             c.row.isHidden = c.full && !Prefs.fullPalette
         }
+        rebuildIgnoreList()
         loading = false
         updateLabels()
     }

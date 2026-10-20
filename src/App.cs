@@ -274,9 +274,10 @@ namespace Cccc
             // Same content rewritten with no copy key pressed, e.g. Office re-publishing
             // the clipboard when the source document closes.
             bool keyed = keyKind != 0 && unchecked(Environment.TickCount - keyTick) < 1500;
-            if (c.Sig != null && c.Sig == lastSig && !keyed)
+            bool ignored = src != null && set.Ignores(src.Exe);
+            if ((c.Sig != null && c.Sig == lastSig && !keyed) || ignored)
             {
-                lastHold = c.Hold; srcSeq = seq; lastSrc = src; lastSecret = c.Secret;
+                lastSig = c.Sig; lastHold = c.Hold; srcSeq = seq; lastSrc = src; lastSecret = c.Secret; keyKind = 0;
                 if (c.Thumb != null) c.Thumb.Dispose();
                 return;
             }
@@ -300,6 +301,7 @@ namespace Cccc
         void OnFailCheck()
         {
             if (Native.GetClipboardSequenceNumber() != keySeq || Native.UserBusy()) return;
+            if (set.Ignores(Sources.ForegroundExe())) return;
             double now = card.Now;
             bool repeat = now - lastFail < 6;
             failCount = repeat ? failCount + 1 : 1;

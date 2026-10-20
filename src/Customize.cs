@@ -84,7 +84,8 @@ namespace Cccc
         Picker pickMain, pickCaps;
         Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH;
         TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH;
-        ComboBox cmbFont;
+        ComboBox cmbFont, cmbIgnore;
+        StackPanel ignoreList;
         Sound soundOk, soundFail;
         Button chevron;
         FrameworkElement fullBody;
@@ -210,6 +211,15 @@ namespace Cccc
             rbWhen[set.SourceWhen].IsChecked = true;
             for (int i = 0; i < rbDetail.Length; i++) rbDetail[i].IsChecked = set.SourceDetail == i;
             Reveal(sourceBody, set.ShowSource, w.IsLoaded && !rebuilt);
+            FillIgnore();
+            ignoreList.Children.Clear();
+            foreach (string exe in set.IgnoreApps)
+            {
+                string e = exe;
+                var remove = new Button { Style = Res<Style>("Subtle"), Content = L.Remove };
+                remove.Click += delegate { Edit(delegate { set.IgnoreApps.Remove(e); }); };
+                ignoreList.Children.Add(Box(CardGrid(Sources.NameFor(e), e + ".exe", remove)));
+            }
             loading = false;
             card.Apply(set);
         }
@@ -497,9 +507,16 @@ namespace Cccc
             rbLang = lang;
             string[] codes = { "auto", "en", "zh" };
             for (int i = 0; i < 3; i++) { int idx = i; BindRadio(rbLang[i], delegate { set.Lang = codes[idx]; }); }
+            cmbIgnore = new ComboBox { Style = Res<Style>("Cmb") };
+            cmbIgnore.DropDownOpened += delegate { FillIgnore(); };
+            cmbIgnore.SelectionChanged += delegate { PickIgnore(); };
+            ignoreList = new StackPanel();
+            FillIgnore();
             return PageOf(
                 SettingCard(L.MenuPause, L.HintPause, chkPause),
                 SettingCard(L.MenuHint, L.HintWarn, chkWarn),
+                SettingCard(L.IgnoreApps, L.HintIgnore, cmbIgnore),
+                ignoreList,
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
                 SettingCard(L.MenuLanguage, L.HintLanguage, langSeg));
@@ -596,6 +613,37 @@ namespace Cccc
                 SettingCard(L.TextSize, L.HintTextSize, textRow),
                 SettingCard(L.SimpleMode, L.HintSimple, chkSimple),
                 SettingCard(L.Transparency, L.HintTransparency, transRow));
+        }
+
+        void FillIgnore()
+        {
+            cmbIgnore.Items.Clear();
+            cmbIgnore.Items.Add(new ComboBoxItem { Content = L.AddApp });
+            foreach (KeyValuePair<string, string> app in Sources.Seen())
+                if (!set.Ignores(app.Key))
+                    cmbIgnore.Items.Add(new ComboBoxItem { Content = app.Value, Tag = app.Key });
+            cmbIgnore.Items.Add(new ComboBoxItem { Content = L.Browse, Tag = "browse" });
+            cmbIgnore.SelectedIndex = 0;
+        }
+
+        void PickIgnore()
+        {
+            if (loading || cmbIgnore.SelectedIndex <= 0) return;
+            var item = cmbIgnore.SelectedItem as ComboBoxItem;
+            cmbIgnore.SelectedIndex = 0;
+            if (item == null) return;
+            if ("browse".Equals(item.Tag))
+            {
+                var dlg = new OpenFileDialog { Filter = L.ProgramFilter };
+                if (dlg.ShowDialog(w) == true)
+                {
+                    string exe = System.IO.Path.GetFileNameWithoutExtension(dlg.FileName);
+                    if (!set.Ignores(exe)) Edit(delegate { set.IgnoreApps.Add(exe); });
+                }
+                return;
+            }
+            string app = item.Tag as string;
+            if (app != null && !set.Ignores(app)) Edit(delegate { set.IgnoreApps.Add(app); });
         }
 
         void OnExpandHeader(object s, System.Windows.Input.MouseButtonEventArgs e)

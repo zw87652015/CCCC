@@ -23,6 +23,15 @@ namespace Cccc
         public string Lang = "auto";
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
+        public List<string> IgnoreApps = new List<string>();
+
+        public bool Ignores(string exe)
+        {
+            if (string.IsNullOrEmpty(exe)) return false;
+            foreach (string e in IgnoreApps)
+                if (string.Equals(e, exe, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
 
         public static Settings Load()
         {
@@ -66,6 +75,13 @@ namespace Cccc
                 s.FontFamily = Str(k, "FontFamily");
                 s.SoundOkFile = Str(k, "SoundOkFile");
                 s.SoundFailFile = Str(k, "SoundFailFile");
+                string[] ignored = k.GetValue("IgnoreApps") as string[];
+                if (ignored != null)
+                    foreach (string e in ignored)
+                    {
+                        string t = (e ?? "").Trim();
+                        if (t.Length > 0) s.IgnoreApps.Add(t);
+                    }
             }
             return s;
         }
@@ -110,6 +126,8 @@ namespace Cccc
                 SetStr(k, "FontFamily", FontFamily);
                 SetStr(k, "SoundOkFile", SoundOkFile);
                 SetStr(k, "SoundFailFile", SoundFailFile);
+                if (IgnoreApps.Count == 0) k.DeleteValue("IgnoreApps", false);
+                else k.SetValue("IgnoreApps", IgnoreApps.ToArray(), RegistryValueKind.MultiString);
             }
         }
 
