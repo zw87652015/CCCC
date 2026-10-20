@@ -8,7 +8,7 @@ using System.Windows.Forms;
 
 namespace Cccc
 {
-    enum Kind { Copied, Cut, Info, Fail, Empty }
+    enum Kind { Copied, Cut, Info, Fail, Empty, Caps }
 
     sealed class Content
     {
@@ -16,7 +16,7 @@ namespace Cccc
         public string Title = "", Meta = "", Sub = "";
         public string Sig, Hold;
         public Bitmap Thumb;
-        public bool CutHint, Secret, SrcLine;
+        public bool CutHint, Secret, SrcLine, CapsOn;
         public int Count = 1;
         public string Site;
         public Bitmap SrcIcon;
@@ -34,9 +34,10 @@ namespace Cccc
         readonly Stopwatch clock = Stopwatch.StartNew();
         readonly Timer timer = new Timer { Interval = 1 };
         readonly StringFormat fmt, fmtCenter;
-        Font fTitle, fSub, fMeta, fBadge;
+        Font fTitle, fSub, fMeta, fBadge, fCaps;
 
         Settings st = new Settings();
+        readonly bool caps;
         string sizeSig = "", themeSig = "", placeSig;
         Theme resolved;
         bool sysLight, slideDown;
@@ -58,8 +59,9 @@ namespace Cccc
         // Raised when the user drags a Freedom card to a new spot (0-1000 within the work area).
         public event Action<int, int> Moved;
 
-        public Card()
+        public Card(bool caps = false)
         {
+            this.caps = caps;
             fmt = new StringFormat(StringFormat.GenericTypographic);
             fmt.FormatFlags |= StringFormatFlags.NoWrap;
             fmt.Trimming = StringTrimming.EllipsisCharacter;
@@ -85,7 +87,7 @@ namespace Cccc
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == Native.WM_MOUSEACTIVATE) { m.Result = (IntPtr)Native.MA_NOACTIVATE; return; }
-            if (st.Position == 10 && shown)
+            if (Pos == 10 && shown)
             {
                 if (m.Msg == Native.WM_LBUTTONDOWN) { BeginDrag(); return; }
                 if (m.Msg == Native.WM_MOUSEMOVE && drag) { DragMove(); return; }
@@ -131,9 +133,8 @@ namespace Cccc
                 Native.GetMonitorInfo(mon, ref mi);
                 int fx = 0, fy = 0;
                 Unplace(mi.rcWork, sx, sy, Px(Edge), out fx, out fy);
-                st.Position = 10;
-                st.FreeX = fx;
-                st.FreeY = fy;
+                if (caps) { st.CapsPosition = 10; st.CapsFreeX = fx; st.CapsFreeY = fy; }
+                else { st.Position = 10; st.FreeX = fx; st.FreeY = fy; }
                 if (Moved != null) Moved(fx, fy);
                 deadline = Now + duration;
             }
@@ -156,14 +157,22 @@ namespace Cccc
         {
             st = settings;
             bool sys = Theme.SystemLight();
-            string size = st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple + "|" + L.Zh;
+            string size = st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple + "|" + L.Zh
+                + (caps ? "|" + st.CapsWidth + "|" + st.CapsHeight : "");
             string theme = st.ThemeMode + "|" + st.Palette + "|" + st.FullPalette + "|" + st.OkColor + "|" + st.WarnColor
                 + "|" + st.BgColor + "|" + st.BorderColor + "|" + st.TitleColor + "|" + st.SubColor + "|" + st.MetaColor + "|" + sys + "|" + st.Transparency;
             if (size != sizeSig)
             {
                 sizeSig = size;
                 k = st.TextScale / 100f;
-                if (st.Simple)
+                if (caps)
+                {
+                    W = st.CapsWidth;
+                    H = Math.Max(st.CapsHeight, 8 + 22 * k);
+                    Line = 18 * k;
+                    HMax = H;
+                }
+                else if (st.Simple)
                 {
                     W = 220;
                     H = Math.Max(48, 26 + 22 * k);
@@ -207,11 +216,12 @@ namespace Cccc
                 face = bold = custom.Name;
                 boldStyle = custom.IsStyleAvailable(FontStyle.Bold) ? FontStyle.Bold : FontStyle.Regular;
             }
-            if (fTitle != null) { fTitle.Dispose(); fSub.Dispose(); fMeta.Dispose(); fBadge.Dispose(); }
+            if (fTitle != null) { fTitle.Dispose(); fSub.Dispose(); fMeta.Dispose(); fBadge.Dispose(); fCaps.Dispose(); }
             fTitle = new Font(bold, 14f * k, boldStyle, GraphicsUnit.Pixel);
             fSub = new Font(face, 12.5f * k, FontStyle.Regular, GraphicsUnit.Pixel);
             fMeta = new Font(face, 12f * k, FontStyle.Regular, GraphicsUnit.Pixel);
             fBadge = new Font(bold, 12f * k, boldStyle, GraphicsUnit.Pixel);
+            fCaps = new Font(bold, 15f, boldStyle, GraphicsUnit.Pixel);
         }
 
         static FontFamily Installed(string name)
@@ -236,7 +246,7 @@ namespace Cccc
             if (repeat) { tPop = now; tBump = now; if (!fresh && oldTitle != c.Title) tTitle = now; }
             else tText = now;
             if (c.Kind == Kind.Fail) tShake = now;
-            bool info = c.Kind == Kind.Info || c.Kind == Kind.Empty;
+            bool info = c.Kind == Kind.Info || c.Kind == Kind.Empty || c.Kind == Kind.Caps;
             duration = info ? (st.DurationMs + 700) / 1000.0 : st.DurationMs / 1000.0;
             deadline = st.StayUntilClicked ? double.PositiveInfinity : now + duration;
             visTarget = 1;
@@ -253,7 +263,8 @@ namespace Cccc
 
         string PlaceSig()
         {
-            return st.Position + "|" + st.FreeX + "|" + st.FreeY + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple;
+            return Pos + "|" + FreeX + "|" + FreeY + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple
+                + (caps ? "|" + st.CapsPosition + "|" + st.CapsFreeX + "|" + st.CapsFreeY + "|" + st.CapsWidth + "|" + st.CapsHeight : "");
         }
 
         void Prepare()
@@ -261,7 +272,7 @@ namespace Cccc
             IntPtr fg = Native.GetForegroundWindow();
             Native.POINT cp;
             Native.GetCursorPos(out cp);
-            int pos = st.Position;
+            int pos = Pos;
             IntPtr mon = fg != IntPtr.Zero && pos != 9 ? Native.MonitorFromWindow(fg, 2) : Native.MonitorFromPoint(cp, 2);
             var mi = new Native.MONITORINFO { cbSize = Marshal.SizeOf(typeof(Native.MONITORINFO)) };
             Native.GetMonitorInfo(mon, ref mi);
@@ -274,9 +285,9 @@ namespace Cccc
             if (light != sysLight) Resolve(light);
             Layout(DpiScale * st.Scale / 100f, resolved);
 
-            slideDown = pos <= 2 || (pos == 10 && st.FreeY < 333);
+            slideDown = pos <= 2 || (pos == 10 && FreeY < 333);
             var work = Rectangle.FromLTRB(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom);
-            Point p = Place(pos, work, new Size(Px(W), Px(HMax)), new Point(cp.X, cp.Y), Px(Edge), st.FreeX, st.FreeY);
+            Point p = Place(pos, work, new Size(Px(W), Px(HMax)), new Point(cp.X, cp.Y), Px(Edge), FreeX, FreeY);
             baseX = p.X - Px(CX);
             baseY = p.Y + Px(HMax) - Px(CY + HMax);
             placeSig = PlaceSig();
@@ -323,6 +334,10 @@ namespace Cccc
         }
 
         int Px(float dip) { return (int)Math.Round(dip * s); }
+
+        int Pos { get { return caps && st.CapsPosition >= 0 ? st.CapsPosition : st.Position; } }
+        int FreeX { get { return caps && st.CapsPosition >= 0 ? st.CapsFreeX : st.FreeX; } }
+        int FreeY { get { return caps && st.CapsPosition >= 0 ? st.CapsFreeY : st.FreeY; } }
 
         float CardH { get { return cur != null && cur.SrcLine ? HMax : H; } }
         float Top { get { return CY + HMax - CardH; } }
@@ -401,7 +416,7 @@ namespace Cccc
             if (shadowH != CardH) Layout(s, th);
 
             bool warn = cur.Kind == Kind.Fail || cur.Kind == Kind.Empty;
-            Color accent = warn ? th.Warn : th.Ok;
+            Color accent = cur.Kind == Kind.Caps ? (cur.CapsOn ? th.Ok : th.Meta) : (warn ? th.Warn : th.Ok);
             double te = now - tEvent;
 
             double tp = now - tPop;
@@ -445,14 +460,15 @@ namespace Cccc
 
         void DrawIcon(Graphics g, double te, Color accent, bool warn)
         {
-            float ix = CX + 32, iy = Top + CardH / 2;
+            bool caps = cur.Kind == Kind.Caps;
+            float ix = CX + (caps ? 24 : 32), iy = Top + CardH / 2;
             Color glyph = Theme.Glyph(accent);
 
             double tr = te - 0.04;
             if (tr >= 0 && tr < 0.6)
             {
                 double u = tr / 0.6;
-                float rr = 14 + 12 * (float)Ease.OutCubic(u);
+                float rr = (caps ? 11 : 14) + (caps ? 10 : 12) * (float)Ease.OutCubic(u);
                 int a = (int)(255 * 0.45 * Math.Pow(1 - u, 1.6));
                 using (var pen = new Pen(Color.FromArgb(a, accent), 1.2f + 1.6f * (float)(1 - u)))
                     g.DrawEllipse(pen, ix - rr, iy - rr, 2 * rr, 2 * rr);
@@ -460,10 +476,27 @@ namespace Cccc
 
             float from = repeatHit ? 0.8f : 0.5f;
             float k = from + (1 - from) * (float)Ease.OutBack(te / 0.34);
-            float r = 14 * k;
+            float r = (caps ? 11 : 14) * k;
             using (var b = new SolidBrush(accent)) g.FillEllipse(b, ix - r, iy - r, 2 * r, 2 * r);
 
             double pc = Ease.OutCubic((te - 0.1) / 0.26);
+            if (caps)
+            {
+                using (var gp = new GraphicsPath())
+                {
+                    gp.AddString(cur.CapsOn ? "A" : "a", fCaps.FontFamily, (int)fCaps.Style, fCaps.Size,
+                                 PointF.Empty, StringFormat.GenericTypographic);
+                    var bnd = gp.GetBounds();
+                    var gs = g.Save();
+                    g.TranslateTransform(ix, iy);
+                    g.ScaleTransform(k, k);
+                    g.TranslateTransform(-(bnd.X + bnd.Width / 2), -(bnd.Y + bnd.Height / 2));
+                    using (var b = new SolidBrush(Color.FromArgb((int)(255 * Ease.Clamp01(pc)), glyph)))
+                        g.FillPath(b, gp);
+                    g.Restore(gs);
+                }
+                return;
+            }
             using (var pen = new Pen(glyph, 2.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
             {
                 if (warn)
@@ -499,6 +532,27 @@ namespace Cccc
         void DrawText(Graphics g, double now, Color accent)
         {
             float right = CX + W - 14;
+
+            if (cur.Kind == Kind.Caps)
+            {
+                float ca = (float)Ease.OutCubic((now - tText) / 0.26);
+                float cl = (float)Ease.OutCubic((now - tTitle) / 0.28);
+                float cx = CX + 46 + 6 * (1 - ca);
+                string bt = cur.CapsOn ? "ON" : "OFF";
+                float bh = 20 * k;
+                float bw = Math.Max(36, g.MeasureString(bt, fBadge, PointF.Empty, fmt).Width + 16);
+                float bx = CX + W - 12 - bw, by = Top + (CardH - bh) / 2;
+                var rect = new RectangleF(bx, by, bw, bh);
+                using (var p = Shapes.RoundRect(rect, bh / 2))
+                using (var b = new SolidBrush(Color.FromArgb((int)((th.Dark ? 48 : 34) * ca), accent)))
+                    g.FillPath(b, p);
+                rect.Offset(0, 0.5f);
+                using (var b = new SolidBrush(Color.FromArgb((int)(255 * ca), accent)))
+                    g.DrawString(bt, fBadge, b, rect, fmtCenter);
+                using (var b = new SolidBrush(Color.FromArgb((int)(255 * ca * cl), th.Title)))
+                    g.DrawString(cur.Title, fTitle, b, new RectangleF(cx, Top + (CardH - 22 * k) / 2, bx - 10 - cx, 22 * k), fmt);
+                return;
+            }
 
             if (st.Simple)
             {

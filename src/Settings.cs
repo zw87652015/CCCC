@@ -19,6 +19,7 @@ namespace Cccc
         public int SourceWhen = 1, SourceDetail = 1;
         public int ThemeMode, Palette, DurationMs = 1900, Position = 6, Scale = 100, TextScale = 100;
         public int FreeX = 500, FreeY = 900, Transparency;
+        public int CapsPosition = -1, CapsFreeX = 500, CapsFreeY = 900, CapsWidth = 200, CapsHeight = 40;
         public string Lang = "auto";
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
@@ -47,6 +48,11 @@ namespace Cccc
                 s.FreeX = Num(k, "FreeX", s.FreeX, 0, 1000);
                 s.FreeY = Num(k, "FreeY", s.FreeY, 0, 1000);
                 s.Transparency = Num(k, "Transparency", s.Transparency, 0, 75);
+                s.CapsPosition = Num(k, "CapsPosition", s.CapsPosition, -1, 10);
+                s.CapsFreeX = Num(k, "CapsFreeX", s.CapsFreeX, 0, 1000);
+                s.CapsFreeY = Num(k, "CapsFreeY", s.CapsFreeY, 0, 1000);
+                s.CapsWidth = Num(k, "CapsWidth", s.CapsWidth, 160, 360);
+                s.CapsHeight = Num(k, "CapsHeight", s.CapsHeight, 32, 64);
                 s.Simple = Flag(k, "Simple", s.Simple);
                 s.Scale = Num(k, "Scale", s.Scale, 75, 200);
                 s.TextScale = Num(k, "TextScale", s.TextScale, 80, 160);
@@ -86,6 +92,11 @@ namespace Cccc
                 k.SetValue("FreeX", FreeX, RegistryValueKind.DWord);
                 k.SetValue("FreeY", FreeY, RegistryValueKind.DWord);
                 k.SetValue("Transparency", Transparency, RegistryValueKind.DWord);
+                k.SetValue("CapsPosition", CapsPosition, RegistryValueKind.DWord);
+                k.SetValue("CapsFreeX", CapsFreeX, RegistryValueKind.DWord);
+                k.SetValue("CapsFreeY", CapsFreeY, RegistryValueKind.DWord);
+                k.SetValue("CapsWidth", CapsWidth, RegistryValueKind.DWord);
+                k.SetValue("CapsHeight", CapsHeight, RegistryValueKind.DWord);
                 k.SetValue("Simple", Simple ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Scale", Scale, RegistryValueKind.DWord);
                 k.SetValue("TextScale", TextScale, RegistryValueKind.DWord);
@@ -109,6 +120,7 @@ namespace Cccc
             Transparency = 0;
             DurationMs = 1900; Position = 6; Scale = 100; TextScale = 100;
             FreeX = 500; FreeY = 900;
+            CapsPosition = -1; CapsFreeX = 500; CapsFreeY = 900; CapsWidth = 200; CapsHeight = 40;
             OkColor = WarnColor = BgColor = BorderColor = TitleColor = SubColor = MetaColor = null;
             FontFamily = SoundOkFile = SoundFailFile = null;
             ShowSource = true; SourceWhen = 1; SourceDetail = 1;

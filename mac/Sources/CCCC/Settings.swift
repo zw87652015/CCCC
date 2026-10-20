@@ -108,6 +108,18 @@ enum Prefs {
         get { d.bool(forKey: "Simple") }
         set { d.set(newValue, forKey: "Simple") }
     }
+    static var capsPosition: Int {
+        get { range("CapsPosition", -1, -1, 10) }
+        set { d.set(newValue, forKey: "CapsPosition") }
+    }
+    static var capsWidth: Int {
+        get { range("CapsWidth", 200, 160, 360) }
+        set { d.set(newValue, forKey: "CapsWidth") }
+    }
+    static var capsHeight: Int {
+        get { range("CapsHeight", 40, 32, 64) }
+        set { d.set(newValue, forKey: "CapsHeight") }
+    }
     static var fontFamily: String? {
         get { text("FontFamily") }
         set { d.set(newValue, forKey: "FontFamily") }
@@ -128,6 +140,7 @@ enum Prefs {
         transparency = 0; simple = false
         fontFamily = nil; soundOkFile = nil; soundFailFile = nil
         showSource = true; sourceWhen = 1; sourceDetail = 1
+        capsPosition = -1; capsWidth = 200; capsHeight = 40
     }
 
     private static func range(_ key: String, _ fallback: Int, _ lo: Int, _ hi: Int) -> Int {

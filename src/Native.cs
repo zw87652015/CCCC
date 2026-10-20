@@ -53,6 +53,7 @@ namespace Cccc
         [DllImport("user32.dll")] public static extern IntPtr GetClipboardOwner();
         [DllImport("user32.dll")] public static extern bool OpenClipboard(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern bool CloseClipboard();
+        [DllImport("ole32.dll")] public static extern int OleGetClipboard([MarshalAs(UnmanagedType.IUnknown)] out object data);
         [DllImport("user32.dll")] public static extern uint EnumClipboardFormats(uint format);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClipboardFormatName(uint format, StringBuilder sb, int max);
         [DllImport("user32.dll")] public static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize, IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);

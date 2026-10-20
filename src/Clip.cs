@@ -14,13 +14,17 @@ namespace Cccc
     {
         public static Content Read()
         {
-            IDataObject d = null;
-            for (int i = 0; i < 5 && d == null; i++)
+            object com = null;
+            for (int i = 0; i < 5 && com == null; i++)
             {
-                try { d = Clipboard.GetDataObject(); }
-                catch (ExternalException) { Thread.Sleep(30); }
+                if (Native.OleGetClipboard(out com) != 0) { com = null; Thread.Sleep(30); }
             }
+            try { return Read(com != null ? new DataObject(com) : null); }
+            finally { if (com != null && Marshal.IsComObject(com)) Marshal.FinalReleaseComObject(com); }
+        }
 
+        static Content Read(IDataObject d)
+        {
             string[] f = null;
             if (d != null)
             {

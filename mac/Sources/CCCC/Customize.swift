@@ -52,6 +52,7 @@ final class Customize: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let onChange: () -> Void
     private let onShowSample: (Bool) -> Void
+    private let onShowCaps: () -> Void
     private let onTest: (Bool) -> Void
     private let onClose: () -> Void
     private var acts: [Act] = []
@@ -61,19 +62,22 @@ final class Customize: NSObject, NSWindowDelegate {
     private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
     private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!
     private var popLang: NSPopUpButton!, popTheme: NSPopUpButton!, popPalette: NSPopUpButton!, popFont: NSPopUpButton!
-    private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!, sldTrans: NSSlider!
-    private var lblSize: NSTextField!, lblText: NSTextField!, lblDuration: NSTextField!, lblTrans: NSTextField!
+    private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!, sldTrans: NSSlider!, sldCapsW: NSSlider!, sldCapsH: NSSlider!
+    private var lblSize: NSTextField!, lblText: NSTextField!, lblDuration: NSTextField!, lblTrans: NSTextField!, lblCapsW: NSTextField!, lblCapsH: NSTextField!
     private var spots: [NSButton] = []
-    private var rbNear: NSButton!, rbRandom: NSButton!
+    private var capsSpots: [NSButton] = []
+    private var rbNear: NSButton!, rbRandom: NSButton!, rbCapsSame: NSButton!, rbCapsNear: NSButton!, rbCapsRandom: NSButton!
     private var rbWhenAlways: NSButton!, rbWhenAuto: NSButton!
     private var rbDetail: [NSButton] = []
     private var colours: [ColourRow] = []
     private var sounds: [SoundRow] = []
     private var tabsView: NSTabView!
 
-    init(onChange: @escaping () -> Void, onShowSample: @escaping (Bool) -> Void, onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void) {
+    init(onChange: @escaping () -> Void, onShowSample: @escaping (Bool) -> Void, onShowCaps: @escaping () -> Void,
+         onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void) {
         self.onChange = onChange
         self.onShowSample = onShowSample
+        self.onShowCaps = onShowCaps
         self.onTest = onTest
         self.onClose = onClose
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
@@ -126,13 +130,18 @@ final class Customize: NSObject, NSWindowDelegate {
         String(describing: Prefs.warnColor) + "|" + String(describing: Prefs.failHint)
     }
 
+    private static func sigCaps() -> String {
+        "\(Prefs.capsWidth)|\(Prefs.capsHeight)|\(Prefs.capsPosition)"
+    }
+
     // Every user change: apply through `changed`, re-sync the window, then pop the real card on screen.
     private func edit(_ f: () -> Void) {
         guard !loading else { return }
-        let shared = Customize.sigShared(), failed = Customize.sigFailed()
+        let shared = Customize.sigShared(), failed = Customize.sigFailed(), caps = Customize.sigCaps()
         f()
         changed()
         if Customize.sigShared() != shared { onShowSample(false) }
+        else if Customize.sigCaps() != caps { onShowCaps() }
         else if Customize.sigFailed() != failed, Prefs.failHint { onShowSample(true) }
     }
 
@@ -214,6 +223,8 @@ final class Customize: NSObject, NSWindowDelegate {
         tabs.addTabViewItem(tab(L.tabBehavior, behaviorPage()))
         tabs.addTabViewItem(tab(L.tabSound, soundPage()))
         tabs.addTabViewItem(tab(L.tabSource, sourcePage()))
+        tabs.addTabViewItem(tab(L.tabCaps, capsPage()))
+        tabs.addTabViewItem(tab(L.tabAbout, aboutPage()))
         tabsView = tabs
 
         let reset = NSButton(title: L.resetDefaults, target: nil, action: nil)
@@ -270,11 +281,10 @@ final class Customize: NSObject, NSWindowDelegate {
     private func generalPage() -> NSView {
         chkPause = check(L.menuPause) { c in Prefs.paused = Customize.isOn(c) }
         chkWarn = check(L.menuHint) { c in Prefs.failHint = Customize.isOn(c) }
-        chkCaps = check(L.menuCaps) { c in Prefs.capsHint = Customize.isOn(c) }
         chkStart = check(L.menuStartup) { c in _ = try? Prefs.setAutoStart(Customize.isOn(c)) }
         chkAuto = check(L.menuAutoUpdate) { c in Prefs.autoUpdate = Customize.isOn(c) }
         popLang = popup([L.langSystem, "English", "中文"]) { c in Prefs.lang = ["auto", "en", "zh"][Customize.popIndex(c)] }
-        return page([chkPause, chkWarn, chkCaps, chkStart, chkAuto, row(L.menuLanguage, [popLang])])
+        return page([chkPause, chkWarn, chkStart, chkAuto, row(L.menuLanguage, [popLang])])
     }
 
     private func appearancePage() -> NSView {
@@ -416,6 +426,75 @@ final class Customize: NSObject, NSWindowDelegate {
         return page([chkSource, row(L.sourceWhen, [rbWhenAlways, rbWhenAuto]), column(detailViews)])
     }
 
+    private func capsPage() -> NSView {
+        chkCaps = check(L.menuCaps) { c in Prefs.capsHint = Customize.isOn(c) }
+        sldCapsW = slider(160, 360) { c in Prefs.capsWidth = Int(round((c as! NSSlider).doubleValue)) }
+        sldCapsW.numberOfTickMarks = 21
+        sldCapsW.allowsTickMarkValuesOnly = true
+        lblCapsW = NSTextField(labelWithString: "")
+        sldCapsH = slider(32, 64) { c in Prefs.capsHeight = Int(round((c as! NSSlider).doubleValue)) }
+        sldCapsH.numberOfTickMarks = 17
+        sldCapsH.allowsTickMarkValuesOnly = true
+        lblCapsH = NSTextField(labelWithString: "")
+        var grid: [NSButton] = []
+        for i in 0..<9 {
+            let b = radio("") { _ in Prefs.capsPosition = i }
+            grid.append(b)
+        }
+        capsSpots = grid
+        let screen = SpotView()
+        screen.spots = grid
+        screen.wantsLayer = true
+        screen.layer?.borderWidth = 1
+        screen.layer?.borderColor = NSColor.separatorColor.cgColor
+        screen.layer?.cornerRadius = 6
+        screen.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        screen.heightAnchor.constraint(equalToConstant: 120).isActive = true
+        for b in grid { screen.addSubview(b) }
+        rbCapsSame = radio(L.posSame) { _ in Prefs.capsPosition = -1 }
+        rbCapsNear = radio(L.posNear) { _ in Prefs.capsPosition = 9 }
+        rbCapsRandom = radio(L.posRandom) { _ in Prefs.capsPosition = 10 }
+        let head = NSTextField(labelWithString: L.positionTitle)
+        head.font = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
+        let box = column([head, screen, rbCapsSame, rbCapsNear, rbCapsRandom])
+        return page([chkCaps, row(L.capsWidth, [sldCapsW, lblCapsW]), row(L.capsHeight, [sldCapsH, lblCapsH]), box])
+    }
+
+    private func aboutPage() -> NSView {
+        let info = Bundle.main
+        let commit = info.object(forInfoDictionaryKey: "CCCCBuildCommit") as? String ?? "unknown"
+        let date = info.object(forInfoDictionaryKey: "CCCCBuildDate") as? String ?? "—"
+        let contributors = (info.object(forInfoDictionaryKey: "CCCCContributors") as? [String] ?? []).joined(separator: ", ")
+        return page([
+            row(L.aboutVersion, [aboutValue(Updater.show(Updater.current))]),
+            row(L.aboutBuild, [aboutValue("\(commit) · \(date)")]),
+            row(L.aboutWebsite, [aboutLink("luojiajiang.uk/cccc", "https://luojiajiang.uk/cccc")]),
+            row(L.aboutDeveloper, [aboutLink("@zw87652015", "https://github.com/zw87652015")]),
+            row(L.aboutContributors, [aboutValue(contributors.isEmpty ? "—" : contributors)]),
+            row(L.aboutLicense, [aboutLink("MIT", "https://github.com/zw87652015/CCCC/blob/main/LICENSE")]),
+        ])
+    }
+
+    private func aboutValue(_ text: String) -> NSTextField {
+        let t = NSTextField(labelWithString: text)
+        t.textColor = .secondaryLabelColor
+        return t
+    }
+
+    private func aboutLink(_ text: String, _ url: String) -> NSButton {
+        let b = NSButton(title: text, target: nil, action: nil)
+        b.bezelStyle = .inline
+        b.isBordered = false
+        b.attributedTitle = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+            .foregroundColor: NSColor.linkColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ])
+        b.target = act { _ = NSWorkspace.shared.open(URL(string: url)!) }
+        b.action = #selector(Act.fire(_:))
+        return b
+    }
+
     // MARK: Sync and preview
 
     func reload() {
@@ -437,6 +516,13 @@ final class Customize: NSObject, NSWindowDelegate {
         sldDuration.doubleValue = Double(Prefs.durationMs / 100)
         sldDuration.isEnabled = !Prefs.stayUntilClicked
         chkStay.state = Prefs.stayUntilClicked ? .on : .off
+        sldCapsW.doubleValue = Double(Prefs.capsWidth)
+        sldCapsH.doubleValue = Double(Prefs.capsHeight)
+        let capsPos = Prefs.capsPosition < 0 ? Prefs.position : Prefs.capsPosition
+        for (i, b) in capsSpots.enumerated() { b.state = capsPos == i ? .on : .off }
+        rbCapsSame.state = Prefs.capsPosition < 0 ? .on : .off
+        rbCapsNear.state = capsPos == 9 ? .on : .off
+        rbCapsRandom.state = capsPos == 10 ? .on : .off
         for (i, b) in spots.enumerated() { b.state = Prefs.position == i ? .on : .off }
         rbNear.state = Prefs.position == 9 ? .on : .off
         rbRandom.state = Prefs.position == 10 ? .on : .off
@@ -471,6 +557,8 @@ final class Customize: NSObject, NSWindowDelegate {
         lblText.stringValue = "\(Prefs.textScale)%"
         lblTrans.stringValue = "\(Prefs.transparency)%"
         lblDuration.stringValue = String(format: "%.1f s", Double(Prefs.durationMs) / 1000)
+        lblCapsW.stringValue = "\(Prefs.capsWidth) px"
+        lblCapsH.stringValue = "\(Prefs.capsHeight) px"
     }
 
     private func resetAll() {
@@ -486,7 +574,7 @@ final class Customize: NSObject, NSWindowDelegate {
     // MARK: Screenshot verb
 
     static func shot(_ dir: String) {
-        let c = Customize(onChange: {}, onShowSample: { _ in }, onTest: { _ in }, onClose: {})
+        let c = Customize(onChange: {}, onShowSample: { _ in }, onShowCaps: {}, onTest: { _ in }, onClose: {})
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let win = c.window
         let sizes: [(String, NSSize)] = [

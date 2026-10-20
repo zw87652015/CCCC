@@ -14,6 +14,22 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/CCCC"
 cp "$MAC/Info.plist" "$APP/Contents/Info.plist"
 
+PLIST="$APP/Contents/Info.plist"
+commit="unknown"
+contributors=""
+if hash="$(git -C "$MAC/.." rev-parse --short HEAD 2>/dev/null)" && [[ -n "$hash" ]]; then
+    commit="$hash"
+    if [[ -n "$(git -C "$MAC/.." status --porcelain 2>/dev/null || true)" ]]; then commit="$hash-dirty"; fi
+    contributors="$(git -C "$MAC/.." log --format='%(trailers:key=Co-authored-by,valueonly)' 2>/dev/null |
+        sed -e 's/<[^>]*>//g' -e 's/[\\"]//g' -e 's/^ *//; s/ *$//' | grep -v '^$' | sort -u || true)"
+fi
+/usr/libexec/PlistBuddy -c "Add :CCCCBuildCommit string $commit" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CCCCBuildDate string $(date +%Y-%m-%d)" "$PLIST"
+/usr/libexec/PlistBuddy -c "Add :CCCCContributors array" "$PLIST"
+while IFS= read -r name; do
+    if [[ -n "$name" ]]; then /usr/libexec/PlistBuddy -c "Add :CCCCContributors: string \"$name\"" "$PLIST"; fi
+done <<< "$contributors"
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 "$APP/Contents/MacOS/CCCC" --export-iconset "$TMP/AppIcon.iconset"

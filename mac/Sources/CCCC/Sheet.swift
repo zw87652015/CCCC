@@ -5,6 +5,7 @@ enum Sheet {
     static func render(_ path: String) {
         L.apply(nil)
         let card = Card(defaults: true)
+        let capsCard = Card(defaults: true, caps: true)
         let cw = card.canvasW, ch = card.canvasH
         let rows = rowSpecs()
         let iconRow: CGFloat = 80
@@ -25,11 +26,13 @@ enum Sheet {
 
         for (col, theme) in [Theme.darkTheme, Theme.lightTheme].enumerated() {
             card.th = theme
+            capsCard.th = theme
             for (row, spec) in rows.enumerated() {
+                let target = spec.0.kind == .caps ? capsCard : card
                 ctx.saveGState()
-                ctx.translateBy(x: CGFloat(col) * cw, y: CGFloat(row) * ch)
-                card.still(spec.0, repeat: spec.1, age: spec.2)
-                card.render(ctx, now: 100)
+                ctx.translateBy(x: CGFloat(col) * cw, y: CGFloat(row) * ch + ch - target.canvasH)
+                target.still(spec.0, repeat: spec.1, age: spec.2)
+                target.render(ctx, now: 100)
                 ctx.restoreGState()
             }
         }
@@ -73,6 +76,7 @@ enum Sheet {
         let image = Content(kind: .copied, title: again[0], meta: L.image, sub: "1920 × 1080")
         image.thumb = thumb
         let appIcon = Icons.app(32)
+        func caps(_ on: Bool) -> Content { let c = Content(kind: .caps, title: L.caps); c.capsOn = on; return c }
         func sourced(_ c: Content, _ text: String, line: Bool = false) -> Content {
             c.srcIcon = appIcon
             c.srcText = text
@@ -88,7 +92,8 @@ enum Sheet {
             (Content(kind: .cut, title: L.cut, meta: L.items(3), sub: "report.pdf, photo.png, 笔记.txt"), false, 1.2),
             (Content(kind: .fail, title: L.nothingCopied, sub: L.stillHolding + text, count: 2), true, 1.2),
             (Content(kind: .info, title: L.readyTitle, sub: L.readySub), false, 1.2),
-            (Content(kind: .info, title: L.capsOn), false, 1.2),
+            (caps(true), false, 1.2),
+            (caps(false), false, 1.2),
             (sourced(Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text), "Google Chrome · github.com", line: true), false, 1.2),
             (sourced(Content(kind: .copied, title: again[0], meta: L.link, sub: "github.com/microsoft/terminal/issues/1234"), ""), false, 1.2),
             (sourced(Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text),

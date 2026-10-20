@@ -1,6 +1,7 @@
 import AppKit
+import CoreText
 
-enum Kind { case copied, cut, info, fail, empty }
+enum Kind { case copied, cut, info, fail, empty, caps }
 
 final class Content {
     var kind: Kind
@@ -10,7 +11,7 @@ final class Content {
     var count: Int
     var quiet = false
     var site: String?, sourceBundle: String?
-    var remote = false, secret = false
+    var remote = false, secret = false, capsOn = false
     var srcIcon: CGImage?
     var srcText = ""
     var srcLine = false
@@ -53,6 +54,7 @@ final class Card {
 
     // Metrics for the current text scale (k) and user size (sc); `defaults` pins both to 100 for the design sheet.
     private let defaults: Bool
+    let caps: Bool
     private(set) var W: CGFloat = 320, H: CGFloat = 64, line: CGFloat = 18, hMax: CGFloat = 82
     private(set) var canvasW: CGFloat = 368, canvasH: CGFloat = 134
     private(set) var k: CGFloat = 1, sc: CGFloat = 1
@@ -62,6 +64,7 @@ final class Card {
     private var fSub = NSFont.systemFont(ofSize: 12.5)
     private var fMeta = NSFont.systemFont(ofSize: 12)
     private var fBadge = NSFont.systemFont(ofSize: 12, weight: .semibold)
+    private var fCaps = NSFont.systemFont(ofSize: 15, weight: .semibold)
 
     private var timer: Timer?
     private var cur: Content?
@@ -79,8 +82,9 @@ final class Card {
 
     var now: Double { ProcessInfo.processInfo.systemUptime }
 
-    init(defaults: Bool = false) {
+    init(defaults: Bool = false, caps: Bool = false) {
         self.defaults = defaults
+        self.caps = caps
         let frame = NSRect(x: 0, y: 0, width: 368, height: 134)
         panel = CardPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         view = CardView(frame: frame)
@@ -103,12 +107,17 @@ final class Card {
         let pct = defaults ? 100 : Prefs.textScale
         let family = defaults ? nil : Prefs.fontFamily
         let simple = !defaults && Prefs.simple
-        let size = "\(pct)|\(family ?? "")|\(simple)|\(L.zh)"
+        let size = "\(pct)|\(family ?? "")|\(simple)|\(L.zh)" + (caps ? "|\(Prefs.capsWidth)|\(Prefs.capsHeight)" : "")
         if size != sizeSig {
             sizeSig = size
             self.simple = simple
             k = CGFloat(pct) / 100
-            if simple {
+            if caps {
+                W = defaults ? 200 : CGFloat(Prefs.capsWidth)
+                H = max(defaults ? 40 : CGFloat(Prefs.capsHeight), 8 + 22 * k)
+                line = 18 * k
+                hMax = H
+            } else if simple {
                 W = 220
                 H = max(48, 26 + 22 * k)
                 line = 18 * k
@@ -143,11 +152,13 @@ final class Card {
             fSub = familyFont(f, 12.5 * k, bold: false)
             fMeta = familyFont(f, 12 * k, bold: false)
             fBadge = familyFont(f, 12 * k, bold: true)
+            fCaps = familyFont(f, 15, bold: true)
         } else {
             fTitle = NSFont.systemFont(ofSize: 14 * k, weight: .semibold)
             fSub = NSFont.systemFont(ofSize: 12.5 * k)
             fMeta = NSFont.systemFont(ofSize: 12 * k)
             fBadge = NSFont.systemFont(ofSize: 12 * k, weight: .semibold)
+            fCaps = NSFont.systemFont(ofSize: 15, weight: .semibold)
         }
     }
 
@@ -184,7 +195,7 @@ final class Card {
     func show(_ c: Content, repeat rep: Bool) {
         let t = now
         let fresh = !shown
-        if fresh || placeSig != Card.placeSig() { prepare() }
+        if fresh || placeSig != placeSignature() { prepare() }
         let oldTitle = cur?.title
         cur = c
         repeatHit = rep
@@ -196,7 +207,7 @@ final class Card {
             tText = t
         }
         if c.kind == .fail { tShake = t }
-        let info = c.kind == .info || c.kind == .empty
+        let info = c.kind == .info || c.kind == .empty || c.kind == .caps
         duration = info ? Double(Prefs.durationMs + 700) / 1000 : Double(Prefs.durationMs) / 1000
         deadline = Prefs.stayUntilClicked ? .infinity : t + duration
         visTarget = 1
@@ -221,16 +232,19 @@ final class Card {
         duration = 1.9; deadline = t + duration; visTarget = 1
     }
 
-    private static func placeSig() -> String {
-        "\(Prefs.position)|\(Prefs.scale)|\(Prefs.textScale)|\(Prefs.fontFamily ?? "")|\(Prefs.simple)"
+    private var pos: Int { caps && Prefs.capsPosition >= 0 ? Prefs.capsPosition : Prefs.position }
+
+    private func placeSignature() -> String {
+        let s = "\(Prefs.position)|\(Prefs.scale)|\(Prefs.textScale)|\(Prefs.fontFamily ?? "")|\(Prefs.simple)"
+        return caps ? s + "|\(Prefs.capsPosition)|\(Prefs.capsWidth)|\(Prefs.capsHeight)" : s
     }
 
     private func prepare() {
-        placeSig = Card.placeSig()
+        placeSig = placeSignature()
         apply()
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
-        let pos = Prefs.position == 10 ? roll() : Prefs.position
+        let pos = self.pos == 10 ? roll() : self.pos
         slideDown = pos <= 2
         slot = Card.place(pos: pos, work: screen.visibleFrame, card: CGSize(width: W * sc, height: hMax * sc),
                           cursor: mouse, margin: Card.edge * sc)
@@ -279,7 +293,7 @@ final class Card {
         guard let c = cur else { return }
 
         let warn = c.kind == .fail || c.kind == .empty
-        let accent = warn ? th.warn : th.ok
+        let accent = c.kind == .caps ? (c.capsOn ? th.ok : th.meta) : (warn ? th.warn : th.ok)
         let te = t - tEvent
         let m = ctx.userSpaceToDeviceSpaceTransform
         let px = sqrt(abs(m.a * m.d - m.b * m.c)) * sc
@@ -343,13 +357,14 @@ final class Card {
     }
 
     private func drawIcon(_ ctx: CGContext, te: Double, accent: NSColor, warn: Bool) {
-        let ix = Card.CX + 32, iy = cardTop + cardH / 2
+        let caps = cur?.kind == .caps
+        let ix = Card.CX + (caps ? 24 : 32), iy = cardTop + cardH / 2
         let glyph = th.glyph(accent).cgColor
 
         let tr = te - 0.04
         if tr >= 0 && tr < 0.6 {
             let u = tr / 0.6
-            let rr = CGFloat(14 + 12 * Ease.outCubic(u))
+            let rr = CGFloat(caps ? 11 : 14) + CGFloat(caps ? 10 : 12) * CGFloat(Ease.outCubic(u))
             let a = 0.45 * pow(1 - u, 1.6)
             ctx.setStrokeColor(accent.withAlphaComponent(CGFloat(a)).cgColor)
             ctx.setLineWidth(CGFloat(1.2 + 1.6 * (1 - u)))
@@ -358,11 +373,24 @@ final class Card {
 
         let from = repeatHit ? 0.8 : 0.5
         let k = from + (1 - from) * CGFloat(Ease.outBack(te / 0.34))
-        let r = 14 * k
+        let r = CGFloat(caps ? 11 : 14) * k
         ctx.setFillColor(accent.cgColor)
         ctx.fillEllipse(in: CGRect(x: ix - r, y: iy - r, width: 2 * r, height: 2 * r))
 
         let pc = Ease.outCubic((te - 0.1) / 0.26)
+        if caps {
+            let str = NSAttributedString(string: cur?.capsOn == true ? "A" : "a", attributes: [
+                .font: fCaps, .foregroundColor: th.glyph(accent).withAlphaComponent(CGFloat(Ease.clamp01(pc)))])
+            let line = CTLineCreateWithAttributedString(str)
+            let b = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+            ctx.saveGState()
+            ctx.translateBy(x: ix, y: iy)
+            ctx.scaleBy(x: k, y: k)
+            ctx.textMatrix = CGAffineTransform(translationX: -b.midX, y: b.midY).scaledBy(x: 1, y: -1)
+            CTLineDraw(line, ctx)
+            ctx.restoreGState()
+            return
+        }
         ctx.setStrokeColor(glyph)
         ctx.setLineWidth(2.4)
         ctx.setLineCap(.round)
@@ -393,6 +421,23 @@ final class Card {
 
     private func drawText(_ ctx: CGContext, _ c: Content, now t: Double, accent: NSColor) {
         var right = Card.CX + W - 14
+
+        if c.kind == .caps {
+            let ta = CGFloat(Ease.outCubic((t - tText) / 0.26))
+            let la = CGFloat(Ease.outCubic((t - tTitle) / 0.28))
+            let tx = Card.CX + 46 + 6 * (1 - ta)
+            let bt = c.capsOn ? "ON" : "OFF"
+            let bh = 20 * k
+            let bw = max(36, measure(bt, fBadge) + 16)
+            let bx = Card.CX + W - 12 - bw, by = cardTop + (cardH - bh) / 2
+            ctx.setFillColor(accent.withAlphaComponent((th.dark ? 48 : 34) / 255 * ta).cgColor)
+            ctx.addPath(Shapes.roundRect(CGRect(x: bx, y: by, width: bw, height: bh), bh / 2))
+            ctx.fillPath()
+            let lh = NSAttributedString(string: bt, attributes: [.font: fBadge]).size().height
+            drawLine(bt, fBadge, accent.withAlphaComponent(ta), x: bx, y: by + (bh - lh) / 2 + 0.5, w: bw, h: lh, align: .center)
+            drawLine(c.title, fTitle, th.title.withAlphaComponent(ta * la), x: tx, y: cardTop + (cardH - 22 * k) / 2, w: bx - 10 - tx, h: 22 * k)
+            return
+        }
 
         if simple {
             // One-line card: just the title next to the status icon.

@@ -58,8 +58,11 @@ enum L {
     static var onClipboard: String { t("On your clipboard", "剪贴板里现在是") }
     static var emptyTitle: String { t("Clipboard is empty", "剪贴板是空的") }
     static var emptySub: String { t("Copy something and it shows up here.", "复制点什么，它就会出现在这里。") }
-    static var capsOn: String { t("Caps Lock ON", "大写锁定 ON") }
-    static var capsOff: String { t("Caps Lock OFF", "大写锁定 OFF") }
+    static var caps: String { t("Caps Lock", "大写锁定") }
+    static var capsWidth: String { t("Card length", "卡片长度") }
+    static var hintCapsWidth: String { t("How wide the Caps Lock card is", "大写锁定卡片的宽度") }
+    static var capsHeight: String { t("Card height", "卡片高度") }
+    static var hintCapsHeight: String { t("How tall the Caps Lock card is", "大写锁定卡片的高度") }
 
     static var menuShow: String { t("Show clipboard", "查看剪贴板") }
     static var menuPause: String { t("Pause", "暂停") }
@@ -114,6 +117,14 @@ enum L {
     static var tabBehavior: String { t("Behavior", "行为") }
     static var tabSound: String { t("Sound", "声音") }
     static var tabSource: String { t("Source", "来源") }
+    static var tabCaps: String { t("Caps Lock", "大写锁定") }
+    static var tabAbout: String { t("About", "关于") }
+    static var aboutVersion: String { t("Version", "版本") }
+    static var aboutBuild: String { t("Build", "构建") }
+    static var aboutWebsite: String { t("Website", "网站") }
+    static var aboutDeveloper: String { t("Developer", "开发者") }
+    static var aboutContributors: String { t("Contributors", "贡献者") }
+    static var aboutLicense: String { t("License", "许可证") }
     static var resetDefaults: String { t("Reset to defaults", "恢复默认") }
     static var resetConfirm: String { t("Reset the card, position, sound and source settings to defaults?", "要将卡片、位置、声音和来源设置恢复为默认吗？") }
     static var closeWindow: String { t("Close", "关闭") }
@@ -144,6 +155,7 @@ enum L {
     static var positionTitle: String { t("Position", "位置") }
     static var posNear: String { t("Near the mouse pointer", "鼠标附近") }
     static var posRandom: String { t("Random", "随机") }
+    static var posSame: String { t("Same as copied card", "与复制卡片相同") }
     static var durationTitle: String { t("Show for", "停留时间") }
     static var stayUntilClicked: String { t("Stay until clicked", "直到点击才关闭") }
     static var playSounds: String { t("Play sounds", "播放提示音") }

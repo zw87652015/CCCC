@@ -56,8 +56,11 @@ namespace Cccc
         public static string OnClipboard { get { return T("On your clipboard", "剪贴板里现在是"); } }
         public static string EmptyTitle { get { return T("Clipboard is empty", "剪贴板是空的"); } }
         public static string EmptySub { get { return T("Copy something and it shows up here.", "复制点什么，它就会出现在这里。"); } }
-        public static string CapsOn { get { return T("Caps Lock ON", "大写锁定 ON"); } }
-        public static string CapsOff { get { return T("Caps Lock OFF", "大写锁定 OFF"); } }
+        public static string Caps { get { return T("Caps Lock", "大写锁定"); } }
+        public static string CapsWidth { get { return T("Card length", "卡片长度"); } }
+        public static string HintCapsWidth { get { return T("How wide the Caps Lock card is", "大写锁定卡片的宽度"); } }
+        public static string CapsHeight { get { return T("Card height", "卡片高度"); } }
+        public static string HintCapsHeight { get { return T("How tall the Caps Lock card is", "大写锁定卡片的高度"); } }
 
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }
@@ -110,6 +113,14 @@ namespace Cccc
         public static string TabBehavior { get { return T("Behavior", "行为"); } }
         public static string TabSound { get { return T("Sound", "声音"); } }
         public static string TabSource { get { return T("Source", "来源"); } }
+        public static string TabCaps { get { return T("Caps Lock", "大写锁定"); } }
+        public static string TabAbout { get { return T("About", "关于"); } }
+        public static string AboutVersion { get { return T("Version", "版本"); } }
+        public static string AboutBuild { get { return T("Build", "构建"); } }
+        public static string AboutWebsite { get { return T("Website", "网站"); } }
+        public static string AboutDeveloper { get { return T("Developer", "开发者"); } }
+        public static string AboutContributors { get { return T("Contributors", "贡献者"); } }
+        public static string AboutLicense { get { return T("License", "许可证"); } }
 
         public static string ResetDefaults { get { return T("Reset to defaults", "恢复默认"); } }
         public static string ThemeTitle { get { return T("Theme", "主题"); } }
@@ -141,6 +152,7 @@ namespace Cccc
         public static string PositionTitle { get { return T("Position", "位置"); } }
         public static string PosNear { get { return T("Near the mouse pointer", "鼠标附近"); } }
         public static string PosFree { get { return T("Freedom", "自由"); } }
+        public static string PosSame { get { return T("Same as copied card", "与复制卡片相同"); } }
         public static string HintFree { get { return T("Drag the card in the preview, or drag the card itself on screen", "拖动预览中的卡片，或直接拖动屏幕上的卡片"); } }
         public static string DurationTitle { get { return T("Show for", "停留时间"); } }
         public static string StayUntilClicked { get { return T("Stay until clicked", "直到点击才关闭"); } }

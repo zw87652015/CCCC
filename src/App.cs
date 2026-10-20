@@ -12,6 +12,7 @@ namespace Cccc
     {
         readonly Settings set = Settings.Load();
         readonly Card card = new Card();
+        readonly Card capsCard = new Card(true);
         readonly Hub hub = new Hub();
         readonly KeyHook hook;
         readonly NotifyIcon tray = new NotifyIcon();
@@ -47,6 +48,14 @@ namespace Cccc
             {
                 set.FreeX = x;
                 set.FreeY = y;
+                Changed();
+            };
+            capsCard.CreateWindow();
+            capsCard.Moved += delegate(int x, int y)
+            {
+                set.CapsPosition = 10;
+                set.CapsFreeX = x;
+                set.CapsFreeY = y;
                 Changed();
             };
             hook = new KeyHook(hub.Handle);
@@ -141,7 +150,7 @@ namespace Cccc
         {
             if (customize == null)
             {
-                customize = new Customize(set, Changed, ShowSample, TestSound);
+                customize = new Customize(set, Changed, ShowSample, ShowCapsSample, TestSound);
                 customize.Closed += delegate { customize = null; };
             }
             customize.Show();
@@ -166,6 +175,11 @@ namespace Cccc
             card.Show(c, false);
         }
 
+        void ShowCapsSample()
+        {
+            capsCard.Show(new Content { Kind = Kind.Caps, Title = L.Caps, CapsOn = Native.CapsLock() }, false);
+        }
+
         void TestSound(bool ok)
         {
             if (ok) sounds.Ok(); else sounds.No();
@@ -175,6 +189,7 @@ namespace Cccc
         {
             L.Apply(set.Lang);
             card.Apply(set);
+            capsCard.Apply(set);
             miShow.Text = L.MenuShow;
             miPause.Text = L.MenuPause;
             miSound.Text = L.MenuSound;
@@ -242,7 +257,7 @@ namespace Cccc
             if (on == capsOn) return;
             capsOn = on;
             if (!set.CapsHint || set.Paused || Native.UserBusy()) return;
-            card.Show(new Content { Kind = Kind.Info, Title = on ? L.CapsOn : L.CapsOff }, false);
+            capsCard.Show(new Content { Kind = Kind.Caps, Title = L.Caps, CapsOn = on }, false);
         }
 
         void OnClipboard()
@@ -413,6 +428,7 @@ namespace Cccc
             tray.Dispose();
             hub.Close();
             card.DestroyHandle();
+            capsCard.DestroyHandle();
             Application.Exit();
         }
     }

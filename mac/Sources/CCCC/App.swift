@@ -55,6 +55,7 @@ private let keyTapCallback: CGEventTapCallBack = { _, type, event, refcon in
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updated: Bool
     private let card = Card()
+    private let capsCard = Card(caps: true)
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private let trayIcon = Icons.trayTemplate()
@@ -221,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func sync() {
         L.apply(Prefs.lang == "auto" ? nil : Prefs.lang)
         card.apply()
+        capsCard.apply()
         customize?.reload()
         miShow.title = L.menuShow
         miPause.title = L.menuPause
@@ -360,6 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self?.sync()
                 },
                 onShowSample: { [weak self] failed in self?.showSample(failed: failed) },
+                onShowCaps: { [weak self] in self?.showCapsSample() },
                 onTest: { [weak self] ok in
                     if ok { self?.sounds.playOk() } else { self?.sounds.playNo() }
                 },
@@ -384,6 +387,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         applySource(c, src, show: Prefs.showSource)
         present(c, repeat: false)
+    }
+
+    private func showCapsSample() {
+        let c = Content(kind: .caps, title: L.caps)
+        c.capsOn = capsLockState()
+        capsCard.show(c, repeat: false)
     }
 
     @objc private func checkUpdateAction() { checkUpdate(manual: true) }
@@ -449,7 +458,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         capsOn = on
         dbg("caps: \(on ? "on" : "off")")
         guard Prefs.capsHint, !Prefs.paused, !userBusy() else { return }
-        present(Content(kind: .info, title: on ? L.capsOn : L.capsOff), repeat: false)
+        let c = Content(kind: .caps, title: L.caps)
+        c.capsOn = on
+        present(c, repeat: false)
     }
 
     private func onKey(packed: Int, seq: Int) {
@@ -574,7 +585,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func present(_ c: Content, repeat rep: Bool) {
         dbg("card: kind=\(c.kind) title=\"\(c.title)\" meta=\"\(c.meta)\" sub=\"\(c.sub)\" count=\(c.count) repeat=\(rep)")
-        card.show(c, repeat: rep)
+        (c.kind == .caps ? capsCard : card).show(c, repeat: rep)
     }
 
     // MARK: Updates

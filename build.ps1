@@ -7,7 +7,23 @@ $exe = Join-Path $bin 'CCCC.exe'
 $ico = Join-Path $bin 'cccc.ico'
 New-Item -ItemType Directory -Force $bin, $dist | Out-Null
 
+$commit = 'unknown'
+$coauthors = @()
+try {
+    $hash = (& git -C $root rev-parse --short HEAD 2>$null)
+    if ($hash) {
+        $commit = $hash
+        if (& git -C $root status --porcelain 2>$null) { $commit += '-dirty' }
+        $coauthors = & git -C $root log --format='%(trailers:key=Co-authored-by,valueonly)' 2>$null |
+            ForEach-Object { ($_ -replace '<[^>]*>', '').Trim() } | Where-Object { $_ } | Sort-Object -Unique
+    }
+} catch { }
+$names = ($coauthors | ForEach-Object { '"' + ($_ -replace '[\\"]', '') + '"' }) -join ', '
+$buildInfo = Join-Path $bin 'BuildInfo.cs'
+Set-Content $buildInfo -Encoding UTF8 "namespace Cccc { static class BuildInfo { public const string Commit = `"$commit`"; public const string Date = `"$(Get-Date -Format 'yyyy-MM-dd')`"; public static readonly string[] Contributors = { $names }; } }"
+
 $src = Get-ChildItem (Join-Path $root 'src') -Filter *.cs | ForEach-Object { $_.FullName }
+$src += $buildInfo
 $fw = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 $wpf = Join-Path $fw 'WPF'
 $opts = @('/nologo', '/target:winexe', '/optimize+', '/debug-', "/win32manifest:$root\app.manifest",

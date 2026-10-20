@@ -64,11 +64,12 @@ namespace Cccc
         readonly Settings set;
         readonly Action changed;
         readonly Action<bool> showSample, test;
+        readonly Action showCaps;
         readonly Card card = new Card();
         readonly Window w;
         readonly DispatcherTimer armTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        readonly RadioButton[] navs = new RadioButton[5];
-        readonly StackPanel[] pages = new StackPanel[5];
+        readonly RadioButton[] navs = new RadioButton[7];
+        readonly StackPanel[] pages = new StackPanel[7];
         readonly TextBlock txtTitle;
         readonly Button btnReset;
         readonly StackPanel pageHost;
@@ -77,19 +78,12 @@ namespace Cccc
         readonly List<Button> presetButtons = new List<Button>();
         readonly Colour[] colours = new Colour[7];
         readonly Button[] tiles = new Button[4];
-        readonly ToggleButton[] spots = new ToggleButton[9];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
         CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple;
-        ToggleButton chipNear, chipFree;
-        Border monitorEl, miniCard;
-        Grid spotsPanel;
-        Canvas overlay;
-        TextBlock hintFree;
-        bool miniDrag;
-        double miniOffX, miniOffY;
-        Slider sldSize, sldText, sldDur, sldTrans;
-        TextBlock lblSize, lblText, lblDur, lblTrans;
+        Picker pickMain, pickCaps;
+        Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH;
+        TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH;
         ComboBox cmbFont;
         Sound soundOk, soundFail;
         Button chevron;
@@ -104,11 +98,12 @@ namespace Cccc
         bool loading, armed, dark, builtZh, expanded, lastFull, popLoading, switching;
         int page;
 
-        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action<bool> onTest)
+        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action<bool> onTest)
         {
             set = settings;
             changed = onChanged;
             showSample = onShowSample;
+            showCaps = onShowCaps;
             test = onTest;
 
             using (var s = typeof(Customize).Assembly.GetManifestResourceStream("Cccc.Customize.xaml"))
@@ -201,10 +196,12 @@ namespace Cccc
             lblDur.Text = (set.DurationMs / 1000.0).ToString("0.0") + " s";
             int fi = fonts.IndexOf(set.FontFamily);
             cmbFont.SelectedIndex = fi < 0 ? 0 : fi;
-            for (int i = 0; i < spots.Length; i++) spots[i].IsChecked = set.Position == i;
-            chipNear.IsChecked = set.Position == 9;
-            chipFree.IsChecked = set.Position == 10;
-            SyncFree();
+            sldCapsW.Value = set.CapsWidth;
+            sldCapsH.Value = set.CapsHeight;
+            lblCapsW.Text = set.CapsWidth + " px";
+            lblCapsH.Text = set.CapsHeight + " px";
+            pickMain.Sync();
+            pickCaps.Sync();
             chkStay.IsChecked = set.StayUntilClicked;
             chkSound.IsChecked = set.Sound;
             ShowSound(soundOk);
@@ -228,15 +225,21 @@ namespace Cccc
 
         static string SigFailed(Settings s) { return s.WarnColor + "|" + s.FailHint; }
 
+        static string SigCaps(Settings s)
+        {
+            return s.CapsWidth + "|" + s.CapsHeight + "|" + s.CapsPosition + "|" + s.CapsFreeX + "|" + s.CapsFreeY;
+        }
+
         // Every user change: apply once through `changed`, re-sync the window, then pop the real card on screen.
         void Edit(Action a)
         {
             if (loading) return;
-            string shared = SigShared(set), failed = SigFailed(set);
+            string shared = SigShared(set), failed = SigFailed(set), caps = SigCaps(set);
             a();
             changed();
             Reload();
             if (SigShared(set) != shared) showSample(false);
+            else if (SigCaps(set) != caps) showCaps();
             else if (SigFailed(set) != failed && set.FailHint) showSample(true);
         }
 
@@ -304,9 +307,9 @@ namespace Cccc
         {
             builtZh = L.Zh;
             w.Title = L.CustomizeTitle;
-            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource };
-            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B" };
-            for (int i = 0; i < 5; i++)
+            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabAbout };
+            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE765", "\uE946" };
+            for (int i = 0; i < 7; i++)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
                 row.Children.Add(new TextBlock { Text = glyphs[i], Style = Res<Style>("Glyph"), Margin = new Thickness(0, 0, 12, 0) });
@@ -319,7 +322,7 @@ namespace Cccc
 
         string PageTitle(int index)
         {
-            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource }[index];
+            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabAbout }[index];
         }
 
         void ShowPage(int index)
@@ -338,8 +341,8 @@ namespace Cccc
 
         void BuildNav()
         {
-            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource" };
-            for (int i = 0; i < 5; i++)
+            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource", "navCaps", "navAbout" };
+            for (int i = 0; i < 7; i++)
             {
                 int index = i;
                 var nav = (RadioButton)w.FindName(names[i]);
@@ -458,21 +461,6 @@ namespace Cccc
             rb.Checked += delegate { Edit(put); };
         }
 
-        // Sticky ToggleButton: clicking the selected one keeps it selected.
-        void BindSticky(ToggleButton b, int pos)
-        {
-            b.Checked += delegate { Edit(delegate { set.Position = pos; }); };
-            b.Unchecked += delegate
-            {
-                if (!loading && set.Position == pos)
-                {
-                    loading = true;
-                    b.IsChecked = true;
-                    loading = false;
-                }
-            };
-        }
-
         Slider Slide(double lo, double hi, double step, Action<int> put)
         {
             var s = new Slider { Minimum = lo, Maximum = hi, TickFrequency = step, IsSnapToTickEnabled = true, Width = 240, Style = Res<Style>("Sld") };
@@ -489,6 +477,8 @@ namespace Cccc
             pages[2] = BuildBehavior();
             pages[3] = BuildSound();
             pages[4] = BuildSource();
+            pages[5] = BuildCaps();
+            pages[6] = BuildAbout();
             foreach (StackPanel p in pages) pageHost.Children.Add(p);
         }
 
@@ -496,12 +486,10 @@ namespace Cccc
         {
             chkPause = Toggle();
             chkWarn = Toggle();
-            chkCaps = Toggle();
             chkStart = Toggle();
             chkAuto = Toggle();
             BindToggle(chkPause, v => set.Paused = v);
             BindToggle(chkWarn, v => set.FailHint = v);
-            BindToggle(chkCaps, v => set.CapsHint = v);
             BindToggle(chkStart, v => Settings.AutoStart = v);
             BindToggle(chkAuto, v => set.AutoUpdate = v);
             RadioButton[] lang;
@@ -512,7 +500,6 @@ namespace Cccc
             return PageOf(
                 SettingCard(L.MenuPause, L.HintPause, chkPause),
                 SettingCard(L.MenuHint, L.HintWarn, chkWarn),
-                SettingCard(L.MenuCaps, L.HintCaps, chkCaps),
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
                 SettingCard(L.MenuLanguage, L.HintLanguage, langSeg));
@@ -827,56 +814,207 @@ namespace Cccc
 
         // MARK: Behavior
 
+        // The position picker shared by the copied card and the Caps Lock card: a monitor with nine
+        // spots, Near/Freedom chips (plus an optional "same as copied" chip), and a draggable mini
+        // card in Freedom mode. `pos` is the effective position shown; `raw` is the stored value.
+        sealed class Picker
+        {
+            readonly Customize c;
+            readonly Func<int> pos, raw, fx, fy;
+            readonly Action<int> setPos;
+            readonly Action<int, int> setFree;
+            readonly Func<Size> cardSize;
+            public readonly ToggleButton[] Spots = new ToggleButton[9];
+            public ToggleButton ChipSame, ChipNear, ChipFree;
+            public readonly StackPanel Body;
+            Border monitorEl, miniCard;
+            Grid spotsPanel;
+            Canvas overlay;
+            TextBlock hintFree;
+            bool miniDrag;
+            double miniOffX, miniOffY;
+
+            public Picker(Customize c, Func<int> pos, Func<int> raw, Action<int> setPos,
+                          Func<int> fx, Func<int> fy, Action<int, int> setFree, Func<Size> cardSize, bool same)
+            {
+                this.c = c;
+                this.pos = pos;
+                this.raw = raw;
+                this.setPos = setPos;
+                this.fx = fx;
+                this.fy = fy;
+                this.setFree = setFree;
+                this.cardSize = cardSize;
+
+                monitorEl = new Border
+                {
+                    Width = 240, Height = 140, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(10),
+                    HorizontalAlignment = HorizontalAlignment.Center, Cursor = System.Windows.Input.Cursors.Hand,
+                };
+                monitorEl.SetResourceReference(Border.BackgroundProperty, "CardSurface");
+                monitorEl.SetResourceReference(Border.BorderBrushProperty, "ControlStroke");
+                spotsPanel = new Grid();
+                for (int i = 0; i < 3; i++)
+                {
+                    spotsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                    spotsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                }
+                for (int i = 0; i < 9; i++)
+                {
+                    int p = i;
+                    var s = new ToggleButton { Style = c.Res<Style>("Spot"), Margin = new Thickness(4) };
+                    Grid.SetRow(s, i / 3);
+                    Grid.SetColumn(s, i % 3);
+                    spotsPanel.Children.Add(s);
+                    Spots[i] = s;
+                    BindSticky(s, p);
+                }
+                // In Freedom mode the spots fade and a mini card (proportional to the real one) is dragged instead.
+                overlay = new Canvas { Visibility = Visibility.Collapsed };
+                miniCard = new Border { CornerRadius = new CornerRadius(3) };
+                miniCard.SetResourceReference(Border.BackgroundProperty, "Accent");
+                overlay.Children.Add(miniCard);
+                var monitorFill = new Grid { Children = { spotsPanel, overlay } };
+                monitorEl.Child = monitorFill;
+                monitorEl.MouseLeftButtonDown += MonitorDown;
+                monitorEl.MouseMove += MonitorMove;
+                monitorEl.MouseLeftButtonUp += MonitorUp;
+                var neck = new Border { Width = 16, Height = 10, HorizontalAlignment = HorizontalAlignment.Center };
+                neck.SetResourceReference(Border.BackgroundProperty, "ControlFill");
+                var foot = new Border { Width = 60, Height = 5, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Center };
+                foot.SetResourceReference(Border.BackgroundProperty, "ControlFill");
+                var monitorBlock = new StackPanel { Children = { monitorEl, neck, foot } };
+
+                var chips = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center,
+                                             Margin = new Thickness(0, 12, 0, 0) };
+                if (same)
+                {
+                    ChipSame = new ToggleButton { Style = c.Res<Style>("Chip"), Content = L.PosSame, Margin = new Thickness(0, 0, 8, 0) };
+                    BindSticky(ChipSame, -1, () => raw() == -1);
+                    chips.Children.Add(ChipSame);
+                }
+                ChipNear = new ToggleButton { Style = c.Res<Style>("Chip"), Content = L.PosNear, Margin = new Thickness(0, 0, 8, 0) };
+                ChipFree = new ToggleButton { Style = c.Res<Style>("Chip"), Content = L.PosFree };
+                BindSticky(ChipNear, 9);
+                BindSticky(ChipFree, 10);
+                chips.Children.Add(ChipNear);
+                chips.Children.Add(ChipFree);
+                hintFree = new TextBlock { Text = L.HintFree, Style = c.Res<Style>("RowHint"), HorizontalAlignment = HorizontalAlignment.Center,
+                                           Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+                Body = new StackPanel { Children = { monitorBlock, chips, hintFree } };
+            }
+
+            public void Sync()
+            {
+                int p = pos();
+                for (int i = 0; i < Spots.Length; i++) Spots[i].IsChecked = p == i;
+                if (ChipSame != null) ChipSame.IsChecked = raw() == -1;
+                ChipNear.IsChecked = p == 9;
+                ChipFree.IsChecked = p == 10;
+                SyncFree();
+            }
+
+            // Sticky ToggleButton: clicking the selected one keeps it selected.
+            void BindSticky(ToggleButton b, int p) { BindSticky(b, p, () => pos() == p); }
+
+            void BindSticky(ToggleButton b, int p, Func<bool> on)
+            {
+                b.Checked += delegate { c.Edit(delegate { setPos(p); }); };
+                b.Unchecked += delegate
+                {
+                    if (!c.loading && on())
+                    {
+                        c.loading = true;
+                        b.IsChecked = true;
+                        c.loading = false;
+                    }
+                };
+            }
+
+            void SyncFree()
+            {
+                if (monitorEl == null) return;
+                bool free = pos() == 10;
+                spotsPanel.IsHitTestVisible = !free;
+                spotsPanel.Opacity = free ? 0.25 : 1;
+                overlay.Visibility = free ? Visibility.Visible : Visibility.Collapsed;
+                hintFree.Visibility = free ? Visibility.Visible : Visibility.Collapsed;
+                if (free) c.w.Dispatcher.BeginInvoke(new Action(PlaceMini), DispatcherPriority.Loaded);
+            }
+
+            // The mini card is the real card shrunk into the monitor's inner area by the primary-work-area ratio.
+            void PlaceMini()
+            {
+                double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
+                if (iw <= 0 || ih <= 0) return;
+                Size mini = MiniSize(iw, ih);
+                miniCard.Width = mini.Width;
+                miniCard.Height = mini.Height;
+                Canvas.SetLeft(miniCard, fx() / 1000.0 * (iw - mini.Width));
+                Canvas.SetTop(miniCard, fy() / 1000.0 * (ih - mini.Height));
+            }
+
+            Size MiniSize(double iw, double ih)
+            {
+                var wa = SystemParameters.WorkArea;
+                double k = c.set.Scale / 100.0;
+                Size sz = cardSize();
+                double mw = Math.Max(28, Math.Min(iw, sz.Width * k / wa.Width * iw));
+                double mh = Math.Max(8, Math.Min(ih, sz.Height * k / wa.Height * ih));
+                return new Size(mw, mh);
+            }
+
+            void MonitorDown(object s, System.Windows.Input.MouseButtonEventArgs e)
+            {
+                if (pos() != 10) return;
+                Point p = e.GetPosition(overlay);
+                if (e.Source == miniCard)
+                {
+                    miniOffX = p.X - Canvas.GetLeft(miniCard);
+                    miniOffY = p.Y - Canvas.GetTop(miniCard);
+                }
+                else
+                {
+                    miniOffX = miniCard.Width / 2;
+                    miniOffY = miniCard.Height / 2;
+                    MoveMini(p);
+                }
+                miniDrag = true;
+                monitorEl.CaptureMouse();
+                e.Handled = true;
+            }
+
+            void MoveMini(Point p)
+            {
+                double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
+                Canvas.SetLeft(miniCard, Math.Max(0, Math.Min(iw - miniCard.Width, p.X - miniOffX)));
+                Canvas.SetTop(miniCard, Math.Max(0, Math.Min(ih - miniCard.Height, p.Y - miniOffY)));
+            }
+
+            void MonitorMove(object s, System.Windows.Input.MouseEventArgs e)
+            {
+                if (miniDrag) MoveMini(e.GetPosition(overlay));
+            }
+
+            void MonitorUp(object s, System.Windows.Input.MouseButtonEventArgs e)
+            {
+                if (!miniDrag) return;
+                miniDrag = false;
+                monitorEl.ReleaseMouseCapture();
+                double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
+                int nx = (int)Math.Round(Canvas.GetLeft(miniCard) * 1000 / Math.Max(1, iw - miniCard.Width));
+                int ny = (int)Math.Round(Canvas.GetTop(miniCard) * 1000 / Math.Max(1, ih - miniCard.Height));
+                nx = Math.Max(0, Math.Min(1000, nx));
+                ny = Math.Max(0, Math.Min(1000, ny));
+                c.Edit(delegate { setFree(nx, ny); });
+            }
+        }
+
         StackPanel BuildBehavior()
         {
-            monitorEl = new Border
-            {
-                Width = 240, Height = 140, CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(10),
-                HorizontalAlignment = HorizontalAlignment.Center, Cursor = System.Windows.Input.Cursors.Hand,
-            };
-            monitorEl.SetResourceReference(Border.BackgroundProperty, "CardSurface");
-            monitorEl.SetResourceReference(Border.BorderBrushProperty, "ControlStroke");
-            spotsPanel = new Grid();
-            for (int i = 0; i < 3; i++)
-            {
-                spotsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                spotsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            }
-            for (int i = 0; i < 9; i++)
-            {
-                int pos = i;
-                var s = new ToggleButton { Style = Res<Style>("Spot"), Margin = new Thickness(4) };
-                Grid.SetRow(s, i / 3);
-                Grid.SetColumn(s, i % 3);
-                spotsPanel.Children.Add(s);
-                spots[i] = s;
-                BindSticky(s, pos);
-            }
-            // In Freedom mode the spots fade and a mini card (proportional to the real one) is dragged instead.
-            overlay = new Canvas { Visibility = Visibility.Collapsed };
-            miniCard = new Border { CornerRadius = new CornerRadius(3) };
-            miniCard.SetResourceReference(Border.BackgroundProperty, "Accent");
-            overlay.Children.Add(miniCard);
-            var monitorFill = new Grid { Children = { spotsPanel, overlay } };
-            monitorEl.Child = monitorFill;
-            monitorEl.MouseLeftButtonDown += MonitorDown;
-            monitorEl.MouseMove += MonitorMove;
-            monitorEl.MouseLeftButtonUp += MonitorUp;
-            var neck = new Border { Width = 16, Height = 10, HorizontalAlignment = HorizontalAlignment.Center };
-            neck.SetResourceReference(Border.BackgroundProperty, "ControlFill");
-            var foot = new Border { Width = 60, Height = 5, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Center };
-            foot.SetResourceReference(Border.BackgroundProperty, "ControlFill");
-            var monitorBlock = new StackPanel { Children = { monitorEl, neck, foot } };
-
-            chipNear = new ToggleButton { Style = Res<Style>("Chip"), Content = L.PosNear, Margin = new Thickness(0, 0, 8, 0) };
-            chipFree = new ToggleButton { Style = Res<Style>("Chip"), Content = L.PosFree };
-            BindSticky(chipNear, 9);
-            BindSticky(chipFree, 10);
-            var chips = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center,
-                                         Margin = new Thickness(0, 12, 0, 0), Children = { chipNear, chipFree } };
-            hintFree = new TextBlock { Text = L.HintFree, Style = Res<Style>("RowHint"), HorizontalAlignment = HorizontalAlignment.Center,
-                                       Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
-            var positionBody = new StackPanel { Children = { monitorBlock, chips, hintFree } };
+            pickMain = new Picker(this, () => set.Position, () => set.Position, p => set.Position = p,
+                () => set.FreeX, () => set.FreeY, (x, y) => { set.FreeX = x; set.FreeY = y; },
+                () => new Size(card.W, card.H), false);
 
             sldDur = Slide(500, 10000, 500, v => set.DurationMs = v);
             lblDur = new TextBlock { Style = Res<Style>("ValueText"), Width = 60, Margin = new Thickness(10, 0, 0, 0) };
@@ -887,86 +1025,57 @@ namespace Cccc
             return PageOf(
                 Header(L.PositionTitle),
                 new TextBlock { Text = L.HintPosition, Style = Res<Style>("RowHint"), Margin = new Thickness(0, 0, 0, 8) },
-                Box(positionBody),
+                Box(pickMain.Body),
                 SettingCard(L.DurationTitle, L.HintDuration, durRow),
                 SettingCard(L.StayUntilClicked, L.HintStay, chkStay));
         }
 
-        void SyncFree()
+        // MARK: Caps Lock
+
+        StackPanel BuildCaps()
         {
-            if (monitorEl == null) return;
-            bool free = set.Position == 10;
-            spotsPanel.IsHitTestVisible = !free;
-            spotsPanel.Opacity = free ? 0.25 : 1;
-            overlay.Visibility = free ? Visibility.Visible : Visibility.Collapsed;
-            hintFree.Visibility = free ? Visibility.Visible : Visibility.Collapsed;
-            if (free) w.Dispatcher.BeginInvoke(new Action(PlaceMini), DispatcherPriority.Loaded);
+            chkCaps = Toggle();
+            BindToggle(chkCaps, v => set.CapsHint = v);
+            sldCapsW = Slide(160, 360, 10, v => set.CapsWidth = v);
+            lblCapsW = new TextBlock { Style = Res<Style>("ValueText"), Width = 56, Margin = new Thickness(10, 0, 0, 0) };
+            var widthRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldCapsW, lblCapsW } };
+            sldCapsH = Slide(32, 64, 2, v => set.CapsHeight = v);
+            lblCapsH = new TextBlock { Style = Res<Style>("ValueText"), Width = 56, Margin = new Thickness(10, 0, 0, 0) };
+            var heightRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldCapsH, lblCapsH } };
+            pickCaps = new Picker(this,
+                () => set.CapsPosition < 0 ? set.Position : set.CapsPosition, () => set.CapsPosition, p => set.CapsPosition = p,
+                () => set.CapsPosition < 0 ? set.FreeX : set.CapsFreeX, () => set.CapsPosition < 0 ? set.FreeY : set.CapsFreeY,
+                (x, y) => { set.CapsPosition = 10; set.CapsFreeX = x; set.CapsFreeY = y; },
+                () => new Size(set.CapsWidth, set.CapsHeight), true);
+
+            return PageOf(
+                SettingCard(L.MenuCaps, L.HintCaps, chkCaps),
+                Header(L.SizeTitle),
+                SettingCard(L.CapsWidth, L.HintCapsWidth, widthRow),
+                SettingCard(L.CapsHeight, L.HintCapsHeight, heightRow),
+                Header(L.PositionTitle),
+                new TextBlock { Text = L.HintPosition, Style = Res<Style>("RowHint"), Margin = new Thickness(0, 0, 0, 8) },
+                Box(pickCaps.Body));
         }
 
-        // The mini card is the real card shrunk into the monitor's inner area by the primary-work-area ratio.
-        void PlaceMini()
+        // MARK: About
+
+        StackPanel BuildAbout()
         {
-            double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
-            if (iw <= 0 || ih <= 0) return;
-            Size mini = MiniSize(iw, ih);
-            miniCard.Width = mini.Width;
-            miniCard.Height = mini.Height;
-            Canvas.SetLeft(miniCard, set.FreeX / 1000.0 * (iw - mini.Width));
-            Canvas.SetTop(miniCard, set.FreeY / 1000.0 * (ih - mini.Height));
+            return PageOf(
+                SettingCard(L.AboutVersion, null, new TextBlock { Text = Updater.Show(Updater.Current), Style = Res<Style>("ValueText") }),
+                SettingCard(L.AboutBuild, null, new TextBlock { Text = BuildInfo.Commit + " · " + BuildInfo.Date, Style = Res<Style>("ValueText") }),
+                SettingCard(L.AboutWebsite, null, LinkTo("luojiajiang.uk/cccc", "https://luojiajiang.uk/cccc")),
+                SettingCard(L.AboutDeveloper, null, LinkTo("@zw87652015", "https://github.com/zw87652015")),
+                SettingCard(L.AboutContributors, null, new TextBlock { Text = BuildInfo.Contributors.Length > 0 ? string.Join(", ", BuildInfo.Contributors) : "—", Style = Res<Style>("ValueText") }),
+                SettingCard(L.AboutLicense, null, LinkTo("MIT", "https://github.com/zw87652015/CCCC/blob/main/LICENSE")));
         }
 
-        Size MiniSize(double iw, double ih)
+        Button LinkTo(string text, string url)
         {
-            var wa = SystemParameters.WorkArea;
-            double k = set.Scale / 100.0;
-            double mw = Math.Max(28, Math.Min(iw, card.W * k / wa.Width * iw));
-            double mh = Math.Max(8, Math.Min(ih, card.H * k / wa.Height * ih));
-            return new Size(mw, mh);
-        }
-
-        void MonitorDown(object s, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (set.Position != 10) return;
-            Point p = e.GetPosition(overlay);
-            if (e.Source == miniCard)
-            {
-                miniOffX = p.X - Canvas.GetLeft(miniCard);
-                miniOffY = p.Y - Canvas.GetTop(miniCard);
-            }
-            else
-            {
-                miniOffX = miniCard.Width / 2;
-                miniOffY = miniCard.Height / 2;
-                MoveMini(p);
-            }
-            miniDrag = true;
-            monitorEl.CaptureMouse();
-            e.Handled = true;
-        }
-
-        void MoveMini(Point p)
-        {
-            double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
-            Canvas.SetLeft(miniCard, Math.Max(0, Math.Min(iw - miniCard.Width, p.X - miniOffX)));
-            Canvas.SetTop(miniCard, Math.Max(0, Math.Min(ih - miniCard.Height, p.Y - miniOffY)));
-        }
-
-        void MonitorMove(object s, System.Windows.Input.MouseEventArgs e)
-        {
-            if (miniDrag) MoveMini(e.GetPosition(overlay));
-        }
-
-        void MonitorUp(object s, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (!miniDrag) return;
-            miniDrag = false;
-            monitorEl.ReleaseMouseCapture();
-            double iw = overlay.ActualWidth, ih = overlay.ActualHeight;
-            int fx = (int)Math.Round(Canvas.GetLeft(miniCard) * 1000 / Math.Max(1, iw - miniCard.Width));
-            int fy = (int)Math.Round(Canvas.GetTop(miniCard) * 1000 / Math.Max(1, ih - miniCard.Height));
-            fx = Math.Max(0, Math.Min(1000, fx));
-            fy = Math.Max(0, Math.Min(1000, fy));
-            Edit(delegate { set.FreeX = fx; set.FreeY = fy; });
+            var b = new Button { Style = Res<Style>("Link"), Content = text, VerticalAlignment = VerticalAlignment.Center };
+            b.Click += delegate { try { System.Diagnostics.Process.Start(url); } catch { } };
+            return b;
         }
 
         // MARK: Sound
@@ -1116,7 +1225,7 @@ namespace Cccc
             if (key != null && key.Length == 5 && key.StartsWith("spot", StringComparison.Ordinal))
             {
                 int n = key[4] - '0';
-                if (n >= 0 && n < 9) return spots[n];
+                if (n >= 0 && n < 9) return pickMain.Spots[n];
             }
             switch (key)
             {
@@ -1137,8 +1246,11 @@ namespace Cccc
                 case "lang2": return rbLang[2];
                 case "when1": return rbWhen[1];
                 case "detail2": return rbDetail[2];
-                case "near": return chipNear;
-                case "free": return chipFree;
+                case "near": return pickMain.ChipNear;
+                case "free": return pickMain.ChipFree;
+                case "capsWidth": return sldCapsW;
+                case "capsHeight": return sldCapsH;
+                case "capsSame": return pickCaps.ChipSame;
             }
             return null;
         }

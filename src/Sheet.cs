@@ -12,6 +12,7 @@ namespace Cccc
         {
             const float s = 1.5f;
             var card = new Card();
+            var capsCard = new Card(true);
             int cw = (int)Math.Ceiling(card.CanvasW * s), ch = (int)Math.Ceiling(card.CanvasH * s);
             var rows = Rows();
             int iconRow = 120;
@@ -27,11 +28,13 @@ namespace Cccc
                 for (int col = 0; col < 2; col++)
                 {
                     card.Layout(s, themes[col]);
+                    capsCard.Layout(s, themes[col]);
                     for (int row = 0; row < rows.Length; row++)
                     {
                         var r = rows[row];
-                        card.Still(r.Item1, r.Item2, r.Item3);
-                        g.DrawImage(card.Pixels, col * cw, row * ch);
+                        var which = r.Item1.Kind == Kind.Caps ? capsCard : card;
+                        which.Still(r.Item1, r.Item2, r.Item3);
+                        g.DrawImage(which.Pixels, col * cw, row * ch + ch - (int)Math.Ceiling(which.CanvasH * s));
                     }
                 }
 
@@ -69,7 +72,8 @@ namespace Cccc
                 Row(new Content { Kind = Kind.Cut, Title = L.Cut, Meta = L.Items(3), Sub = "report.pdf, photo.png, 笔记.txt" }, false, 1.2),
                 Row(new Content { Kind = Kind.Fail, Title = L.NothingCopied, Sub = L.StillHolding + text, Count = 2 }, true, 1.2),
                 Row(new Content { Kind = Kind.Info, Title = L.ReadyTitle, Sub = L.ReadySub }, false, 1.2),
-                Row(new Content { Kind = Kind.Info, Title = L.CapsOn }, false, 1.2),
+                Row(new Content { Kind = Kind.Caps, Title = L.Caps, CapsOn = true }, false, 1.2),
+                Row(new Content { Kind = Kind.Caps, Title = L.Caps }, false, 1.2),
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text, SrcIcon = appIcon, SrcText = "Google Chrome · github.com", SrcLine = true }, false, 1.2),
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Link, Sub = "github.com/microsoft/terminal/issues/1234", SrcIcon = appIcon }, false, 1.2),
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text, SrcIcon = appIcon, SrcText = "Visual Studio Code · github.com · Pull request #1234: Add customizable source display", SrcLine = true }, false, 1.2),
