@@ -10,7 +10,7 @@ namespace Cccc
         public const int WM_MOUSEACTIVATE = 0x0021;
         public const int WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205;
         public const int WM_MOUSEMOVE = 0x0200;
-        public const int WM_APP_KEY = 0x8001;
+        public const int WM_APP_KEY = 0x8001, WM_APP_FRAME = 0x8002;
         public const int MA_NOACTIVATE = 3;
         public const int WS_POPUP = unchecked((int)0x80000000);
         public const int WS_EX_LAYERED = 0x80000, WS_EX_TOOLWINDOW = 0x80, WS_EX_TOPMOST = 0x8, WS_EX_NOACTIVATE = 0x08000000;
@@ -98,8 +98,6 @@ namespace Cccc
         [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
         [DllImport("dwmapi.dll")] public static extern int DwmFlush();
         [DllImport("winmm.dll", CharSet = CharSet.Unicode)] public static extern int mciSendString(string command, StringBuilder ret, int retLen, IntPtr callback);
-        [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);
-        [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint ms);
         [DllImport("uxtheme.dll", EntryPoint = "#135")] static extern int SetPreferredAppMode(int mode);
         [DllImport("uxtheme.dll", EntryPoint = "#136")] static extern void FlushMenuThemes();
 

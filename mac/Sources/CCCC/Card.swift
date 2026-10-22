@@ -207,9 +207,9 @@ final class Card {
             tText = t
         }
         if c.kind == .fail { tShake = t }
-        let info = c.kind == .info || c.kind == .empty || c.kind == .caps
-        duration = info ? Double(Prefs.durationMs + 700) / 1000 : Double(Prefs.durationMs) / 1000
-        deadline = Prefs.stayUntilClicked ? .infinity : t + duration
+        let info = c.kind == .info || c.kind == .empty
+        duration = Double(caps ? Prefs.capsDurationMs : Prefs.durationMs + (info ? 700 : 0)) / 1000
+        deadline = (caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) ? .infinity : t + duration
         visTarget = 1
 
         if !fresh { return }
@@ -332,7 +332,7 @@ final class Card {
         ctx.strokePath()
 
         let remain = Ease.clamp01((deadline - t) / duration)
-        if visTarget > 0 && remain > 0 && !Prefs.stayUntilClicked {
+        if visTarget > 0 && remain > 0 && !(caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) {
             let x0 = Card.CX + Card.R, x1 = Card.CX + W - Card.R, y = cardTop + cardH - 3
             ctx.setStrokeColor(accent.withAlphaComponent(th.dark ? 70 / 255 : 60 / 255).cgColor)
             ctx.setLineWidth(2)

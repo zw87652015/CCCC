@@ -80,10 +80,10 @@ namespace Cccc
         readonly Button[] tiles = new Button[4];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple;
+        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay;
         Picker pickMain, pickCaps;
-        Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH;
-        TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH;
+        Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur;
+        TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur;
         ComboBox cmbFont, cmbIgnore;
         StackPanel ignoreList;
         Sound soundOk, soundFail;
@@ -191,6 +191,10 @@ namespace Cccc
             sldTrans.Value = set.Transparency;
             sldDur.Value = set.DurationMs;
             sldDur.IsEnabled = !set.StayUntilClicked;
+            sldCapsDur.Value = set.CapsDurationMs;
+            sldCapsDur.IsEnabled = !set.CapsStayUntilClicked;
+            lblCapsDur.Text = (set.CapsDurationMs / 1000.0).ToString("0.0") + " s";
+            chkCapsStay.IsChecked = set.CapsStayUntilClicked;
             lblSize.Text = set.Scale + "%";
             lblText.Text = set.TextScale + "%";
             lblTrans.Text = set.Transparency + "%";
@@ -237,7 +241,8 @@ namespace Cccc
 
         static string SigCaps(Settings s)
         {
-            return s.CapsWidth + "|" + s.CapsHeight + "|" + s.CapsPosition + "|" + s.CapsFreeX + "|" + s.CapsFreeY;
+            return s.CapsWidth + "|" + s.CapsHeight + "|" + s.CapsPosition + "|" + s.CapsFreeX + "|" + s.CapsFreeY
+                + "|" + s.CapsDurationMs + "|" + s.CapsStayUntilClicked;
         }
 
         // Every user change: apply once through `changed`, re-sync the window, then pop the real card on screen.
@@ -1084,6 +1089,11 @@ namespace Cccc
         {
             chkCaps = Toggle();
             BindToggle(chkCaps, v => set.CapsHint = v);
+            sldCapsDur = Slide(500, 10000, 100, v => set.CapsDurationMs = v);
+            lblCapsDur = new TextBlock { Style = Res<Style>("ValueText"), Width = 60, Margin = new Thickness(10, 0, 0, 0) };
+            var durRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldCapsDur, lblCapsDur } };
+            chkCapsStay = Toggle();
+            BindToggle(chkCapsStay, v => set.CapsStayUntilClicked = v);
             sldCapsW = Slide(160, 360, 10, v => set.CapsWidth = v);
             lblCapsW = new TextBlock { Style = Res<Style>("ValueText"), Width = 56, Margin = new Thickness(10, 0, 0, 0) };
             var widthRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldCapsW, lblCapsW } };
@@ -1098,6 +1108,8 @@ namespace Cccc
 
             return PageOf(
                 SettingCard(L.MenuCaps, L.HintCaps, chkCaps),
+                SettingCard(L.DurationTitle, L.HintDuration, durRow),
+                SettingCard(L.StayUntilClicked, L.HintStay, chkCapsStay),
                 Header(L.SizeTitle),
                 SettingCard(L.CapsWidth, L.HintCapsWidth, widthRow),
                 SettingCard(L.CapsHeight, L.HintCapsHeight, heightRow),
@@ -1297,6 +1309,8 @@ namespace Cccc
                 case "near": return pickMain.ChipNear;
                 case "free": return pickMain.ChipFree;
                 case "capsWidth": return sldCapsW;
+                case "capsDuration": return sldCapsDur;
+                case "capsStay": return chkCapsStay;
                 case "capsHeight": return sldCapsH;
                 case "capsSame": return pickCaps.ChipSame;
             }

@@ -88,6 +88,14 @@ enum Prefs {
         get { d.bool(forKey: "StayUntilClicked") }
         set { d.set(newValue, forKey: "StayUntilClicked") }
     }
+    static var capsDurationMs: Int {
+        get { range("CapsDurationMs", 2600, 500, 10000) }
+        set { d.set(newValue, forKey: "CapsDurationMs") }
+    }
+    static var capsStayUntilClicked: Bool {
+        get { d.bool(forKey: "CapsStayUntilClicked") }
+        set { d.set(newValue, forKey: "CapsStayUntilClicked") }
+    }
     static var position: Int {
         get { range("Position", 6, 0, 10) }
         set { d.set(newValue, forKey: "Position") }
@@ -148,6 +156,7 @@ enum Prefs {
         themeMode = 0; palette = 0; fullPalette = false
         okColor = nil; warnColor = nil; bgColor = nil; borderColor = nil; titleColor = nil; subColor = nil; metaColor = nil
         durationMs = 1900; stayUntilClicked = false; position = 6; scale = 100; textScale = 100
+        capsDurationMs = 2600; capsStayUntilClicked = false
         transparency = 0; simple = false
         fontFamily = nil; soundOkFile = nil; soundFailFile = nil
         showSource = true; sourceWhen = 1; sourceDetail = 1

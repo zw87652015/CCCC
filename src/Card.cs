@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace Cccc
@@ -32,7 +33,7 @@ namespace Cccc
         public float DpiScale = 1;
 
         readonly Stopwatch clock = Stopwatch.StartNew();
-        readonly Timer timer = new Timer { Interval = 1 };
+        Vsync vsync;
         readonly StringFormat fmt, fmtCenter;
         Font fTitle, fSub, fMeta, fBadge, fCaps;
 
@@ -45,10 +46,11 @@ namespace Cccc
 
         Surface surf;
         Bitmap shadow;
+        int[] shadowPx;
         float shadowH;
         Theme th = Theme.DarkTheme, shadowTheme;
         Content cur;
-        bool shown, repeatHit, hoverArmed, fastTimer;
+        bool shown, repeatHit, hoverArmed;
         double vis, visTarget, last, deadline, duration = 2;
         double tEvent = -9, tPop = -9, tBump = -9, tShake = -9, tText = -9, tTitle = -9;
         int baseX, baseY;
@@ -67,7 +69,6 @@ namespace Cccc
             fmt.Trimming = StringTrimming.EllipsisCharacter;
             fmtCenter = new StringFormat(fmt) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
-            timer.Tick += delegate { Frame(); };
             Apply(st);
         }
 
@@ -82,10 +83,12 @@ namespace Cccc
                 Style = Native.WS_POPUP,
                 ExStyle = Native.WS_EX_LAYERED | Native.WS_EX_TOOLWINDOW | Native.WS_EX_TOPMOST | Native.WS_EX_NOACTIVATE,
             });
+            vsync = new Vsync(Handle, Native.WM_APP_FRAME);
         }
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == Native.WM_APP_FRAME) { vsync.Done(); if (shown) Frame(); return; }
             if (m.Msg == Native.WM_MOUSEACTIVATE) { m.Result = (IntPtr)Native.MA_NOACTIVATE; return; }
             if (Pos == 10 && shown)
             {
@@ -115,7 +118,6 @@ namespace Cccc
             Native.GetCursorPos(out p);
             baseX = p.X - Px(CX) - dragOffX;
             baseY = p.Y - Px(Top) - dragOffY;
-            Frame();
         }
 
         void EndDrag()
@@ -136,7 +138,7 @@ namespace Cccc
                 if (caps) { st.CapsPosition = 10; st.CapsFreeX = fx; st.CapsFreeY = fy; }
                 else { st.Position = 10; st.FreeX = fx; st.FreeY = fy; }
                 if (Moved != null) Moved(fx, fy);
-                deadline = Now + duration;
+                deadline = (caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : Now + duration;
             }
             else visTarget = 0;
         }
@@ -246,9 +248,9 @@ namespace Cccc
             if (repeat) { tPop = now; tBump = now; if (!fresh && oldTitle != c.Title) tTitle = now; }
             else tText = now;
             if (c.Kind == Kind.Fail) tShake = now;
-            bool info = c.Kind == Kind.Info || c.Kind == Kind.Empty || c.Kind == Kind.Caps;
-            duration = info ? (st.DurationMs + 700) / 1000.0 : st.DurationMs / 1000.0;
-            deadline = st.StayUntilClicked ? double.PositiveInfinity : now + duration;
+            bool info = c.Kind == Kind.Info || c.Kind == Kind.Empty;
+            duration = caps ? st.CapsDurationMs / 1000.0 : (st.DurationMs + (info ? 700 : 0)) / 1000.0;
+            deadline = (caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : now + duration;
             visTarget = 1;
 
             if (!fresh) return;
@@ -257,8 +259,7 @@ namespace Cccc
             Frame();
             Native.ShowWindow(Handle, Native.SW_SHOWNOACTIVATE);
             Native.SetWindowPos(Handle, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
-            if (!fastTimer) { Native.timeBeginPeriod(1); fastTimer = true; }
-            timer.Start();
+            vsync.Start();
         }
 
         string PlaceSig()
@@ -327,7 +328,8 @@ namespace Cccc
             if (shadowTheme != theme || shadowH != CardH)
             {
                 if (shadow != null) shadow.Dispose();
-                shadow = Alpha.Shadow(surf.W, surf.H, s, new RectangleF(CX, Top, W, CardH), R, theme);
+                shadowPx = Alpha.Shadow(surf.W, surf.H, s, new RectangleF(CX, Top, W, CardH), R, theme);
+                shadow = Alpha.Write(shadowPx, surf.W, surf.H, PixelFormat.Format32bppPArgb);
                 shadowTheme = theme;
                 shadowH = CardH;
             }
@@ -363,8 +365,6 @@ namespace Cccc
             vis = visTarget > vis ? Math.Min(1, vis + dt / 0.34) : Math.Max(0, vis - dt / 0.26);
             if (vis <= 0 && visTarget <= 0) { HideNow(); return; }
 
-            Render(now);
-
             double dy = (1 - Ease.OutQuint(vis)) * 18, dx = 0, ts = now - tShake;
             if (slideDown) dy = -dy;
             if (ts >= 0 && ts < 0.5)
@@ -372,9 +372,12 @@ namespace Cccc
                 double u = ts / 0.5;
                 dx = 7 * Math.Sin(u * Math.PI * 7) * (1 - u) * (1 - u);
             }
+            // The window moves by whole pixels; the remainder is drawn into the bitmap.
+            double ox = dx * s, oy = dy * s;
+            int ix = (int)Math.Floor(ox), iy = (int)Math.Floor(oy);
+            Render(now, (float)(ox - ix), (float)(oy - iy));
             byte alpha = (byte)Math.Round(255 * (100 - st.Transparency) / 100.0 * Ease.OutCubic(Math.Min(1, vis * 1.5)));
-            Push(baseX + (int)Math.Round(dx * s), baseY + (int)Math.Round(dy * s), alpha);
-            Native.DwmFlush();
+            Push(baseX + ix, baseY + iy, alpha);
         }
 
         void Push(int x, int y, byte alpha)
@@ -389,10 +392,9 @@ namespace Cccc
 
         void HideNow()
         {
-            timer.Stop();
+            vsync.Stop();
             Native.ShowWindow(Handle, Native.SW_HIDE);
             shown = false;
-            if (fastTimer) { Native.timeEndPeriod(1); fastTimer = false; }
         }
 
         // Renders a frozen moment `age` seconds after an event, for the design sheet and the settings preview.
@@ -407,12 +409,14 @@ namespace Cccc
             Render(now);
         }
 
-        void Render(double now)
+        void Render(double now) { Render(now, 0, 0); }
+
+        // ox, oy: sub-pixel shift in device pixels.
+        void Render(double now, float ox, float oy)
         {
             Graphics g = surf.G;
             g.ResetTransform();
-            g.Clear(Color.Transparent);
-            if (cur == null) return;
+            if (cur == null) { g.Clear(Color.Transparent); return; }
             if (shadowH != CardH) Layout(s, th);
 
             bool warn = cur.Kind == Kind.Fail || cur.Kind == Kind.Empty;
@@ -420,15 +424,22 @@ namespace Cccc
             double te = now - tEvent;
 
             double tp = now - tPop;
-            if (tp >= 0 && tp < 0.24)
+            bool pop = tp >= 0 && tp < 0.24;
+            if (!pop && ox == 0 && oy == 0) Marshal.Copy(shadowPx, 0, surf.Bits, shadowPx.Length);
+            else
             {
-                float k = 1 + 0.03f * (float)Math.Sin(Math.PI * tp / 0.24);
-                float cx = (CX + W / 2) * s, cy = (Top + CardH / 2) * s;
-                g.TranslateTransform(cx, cy);
-                g.ScaleTransform(k, k);
-                g.TranslateTransform(-cx, -cy);
+                g.Clear(Color.Transparent);
+                g.TranslateTransform(ox, oy);
+                if (pop)
+                {
+                    float k = 1 + 0.03f * (float)Math.Sin(Math.PI * tp / 0.24);
+                    float cx = (CX + W / 2) * s, cy = (Top + CardH / 2) * s;
+                    g.TranslateTransform(cx, cy);
+                    g.ScaleTransform(k, k);
+                    g.TranslateTransform(-cx, -cy);
+                }
+                g.DrawImage(shadow, new Rectangle(0, 0, surf.W, surf.H));
             }
-            g.DrawImage(shadow, new Rectangle(0, 0, surf.W, surf.H));
             g.ScaleTransform(s, s);
 
             var card = new RectangleF(CX, Top, W, CardH);
@@ -447,7 +458,7 @@ namespace Cccc
                 g.DrawPath(pen, path);
 
             double remain = Ease.Clamp01((deadline - now) / duration);
-            if (visTarget > 0 && remain > 0 && !st.StayUntilClicked)
+            if (visTarget > 0 && remain > 0 && !(caps ? st.CapsStayUntilClicked : st.StayUntilClicked))
             {
                 float x0 = CX + R, x1 = CX + W - R, y = Top + CardH - 3f;
                 using (var pen = new Pen(Color.FromArgb(th.Dark ? 70 : 60, accent), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
@@ -523,9 +534,11 @@ namespace Cccc
             using (var ia = new ImageAttributes())
             {
                 ia.SetColorMatrix(new ColorMatrix { Matrix33 = ta });
+                var mode = g.InterpolationMode;
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 var dst = new[] { new PointF(x, y), new PointF(x + size, y), new PointF(x, y + size) };
                 g.DrawImage(cur.SrcIcon, dst, new RectangleF(0, 0, cur.SrcIcon.Width, cur.SrcIcon.Height), GraphicsUnit.Pixel, ia);
+                g.InterpolationMode = mode;
             }
         }
 
@@ -652,6 +665,53 @@ namespace Cccc
 
             using (var b = new SolidBrush(Color.FromArgb((int)(255 * ta), th.Sub)))
                 g.DrawString(cur.Sub, fSub, b, new RectangleF(tx, top + 21 * k, maxW, 20 * k), fmt);
+        }
+    }
+
+    // Posts `msg` to `hwnd` once per display refresh while running, never more than one at a time.
+    // Waiting off the UI thread keeps input responsive and frames evenly spaced at any refresh rate.
+    sealed class Vsync
+    {
+        readonly IntPtr hwnd;
+        readonly int msg;
+        readonly AutoResetEvent wake = new AutoResetEvent(false);
+        volatile bool running;
+        int pending;
+        Thread thread;
+
+        public Vsync(IntPtr hwnd, int msg) { this.hwnd = hwnd; this.msg = msg; }
+
+        public void Start()
+        {
+            running = true;
+            if (thread == null)
+            {
+                thread = new Thread(Loop) { IsBackground = true, Name = "CCCC vsync" };
+                thread.Start();
+            }
+            wake.Set();
+        }
+
+        public void Stop() { running = false; }
+
+        // Call when the posted message has been handled.
+        public void Done() { Interlocked.Exchange(ref pending, 0); }
+
+        void Loop()
+        {
+            var sw = Stopwatch.StartNew();
+            int fast = 0;
+            while (true)
+            {
+                if (!running) { wake.WaitOne(); continue; }
+                double t0 = sw.Elapsed.TotalMilliseconds;
+                bool ok = Native.DwmFlush() == 0;
+                // DwmFlush returns at once when nothing is composing (e.g. locked session); fall back to ~60 Hz.
+                if (!ok || sw.Elapsed.TotalMilliseconds - t0 < 1) { if (++fast >= 3) Thread.Sleep(15); }
+                else fast = 0;
+                if (running && Interlocked.Exchange(ref pending, 1) == 0)
+                    Native.PostMessage(hwnd, msg, IntPtr.Zero, IntPtr.Zero);
+            }
         }
     }
 }

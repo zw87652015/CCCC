@@ -61,12 +61,12 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private var fontFamilies: [String] = []
 
     private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
-    private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!
+    private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!, chkCapsStay: NSButton!
     private var popLang: NSPopUpButton!, popTheme: NSPopUpButton!, popPalette: NSPopUpButton!, popFont: NSPopUpButton!
     private var popIgnore: NSPopUpButton!
     private var ignoreList: NSStackView!
-    private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!, sldTrans: NSSlider!, sldCapsW: NSSlider!, sldCapsH: NSSlider!
-    private var lblSize: NSTextField!, lblText: NSTextField!, lblDuration: NSTextField!, lblTrans: NSTextField!, lblCapsW: NSTextField!, lblCapsH: NSTextField!
+    private var sldSize: NSSlider!, sldText: NSSlider!, sldDuration: NSSlider!, sldTrans: NSSlider!, sldCapsW: NSSlider!, sldCapsH: NSSlider!, sldCapsDuration: NSSlider!
+    private var lblSize: NSTextField!, lblText: NSTextField!, lblDuration: NSTextField!, lblTrans: NSTextField!, lblCapsW: NSTextField!, lblCapsH: NSTextField!, lblCapsDuration: NSTextField!
     private var spots: [NSButton] = []
     private var capsSpots: [NSButton] = []
     private var rbNear: NSButton!, rbRandom: NSButton!, rbCapsSame: NSButton!, rbCapsNear: NSButton!, rbCapsRandom: NSButton!
@@ -134,7 +134,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     }
 
     private static func sigCaps() -> String {
-        "\(Prefs.capsWidth)|\(Prefs.capsHeight)|\(Prefs.capsPosition)"
+        "\(Prefs.capsWidth)|\(Prefs.capsHeight)|\(Prefs.capsPosition)|\(Prefs.capsDurationMs)|\(Prefs.capsStayUntilClicked)"
     }
 
     // Every user change: apply through `changed`, re-sync the window, then pop the real card on screen.
@@ -526,6 +526,9 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
 
     private func capsPage() -> NSView {
         chkCaps = check(L.menuCaps) { c in Prefs.capsHint = Customize.isOn(c) }
+        chkCapsStay = check(L.stayUntilClicked) { c in Prefs.capsStayUntilClicked = Customize.isOn(c) }
+        sldCapsDuration = slider(5, 100) { c in Prefs.capsDurationMs = Int(round((c as! NSSlider).doubleValue)) * 100 }
+        lblCapsDuration = NSTextField(labelWithString: "")
         sldCapsW = slider(160, 360) { c in Prefs.capsWidth = Int(round((c as! NSSlider).doubleValue)) }
         sldCapsW.numberOfTickMarks = 21
         sldCapsW.allowsTickMarkValuesOnly = true
@@ -555,7 +558,8 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         let head = NSTextField(labelWithString: L.positionTitle)
         head.font = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
         let box = column([head, screen, rbCapsSame, rbCapsNear, rbCapsRandom])
-        return page([chkCaps, row(L.capsWidth, [sldCapsW, lblCapsW]), row(L.capsHeight, [sldCapsH, lblCapsH]), box])
+        return page([chkCaps, row(L.durationTitle, [sldCapsDuration, lblCapsDuration]), chkCapsStay,
+                     row(L.capsWidth, [sldCapsW, lblCapsW]), row(L.capsHeight, [sldCapsH, lblCapsH]), box])
     }
 
     private func aboutPage() -> NSView {
@@ -614,6 +618,9 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         sldDuration.doubleValue = Double(Prefs.durationMs / 100)
         sldDuration.isEnabled = !Prefs.stayUntilClicked
         chkStay.state = Prefs.stayUntilClicked ? .on : .off
+        sldCapsDuration.doubleValue = Double(Prefs.capsDurationMs) / 100
+        sldCapsDuration.isEnabled = !Prefs.capsStayUntilClicked
+        chkCapsStay.state = Prefs.capsStayUntilClicked ? .on : .off
         sldCapsW.doubleValue = Double(Prefs.capsWidth)
         sldCapsH.doubleValue = Double(Prefs.capsHeight)
         let capsPos = Prefs.capsPosition < 0 ? Prefs.position : Prefs.capsPosition
@@ -656,6 +663,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         lblText.stringValue = "\(Prefs.textScale)%"
         lblTrans.stringValue = "\(Prefs.transparency)%"
         lblDuration.stringValue = String(format: "%.1f s", Double(Prefs.durationMs) / 1000)
+        lblCapsDuration.stringValue = String(format: "%.1f s", Double(Prefs.capsDurationMs) / 1000)
         lblCapsW.stringValue = "\(Prefs.capsWidth) px"
         lblCapsH.stringValue = "\(Prefs.capsHeight) px"
     }

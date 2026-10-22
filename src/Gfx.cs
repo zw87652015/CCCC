@@ -182,7 +182,7 @@ namespace Cccc
     sealed class Surface : IDisposable
     {
         public readonly int W, H;
-        public readonly IntPtr Hdc;
+        public readonly IntPtr Hdc, Bits;
         public readonly Bitmap Bmp;
         public readonly Graphics G;
         readonly IntPtr hbmp, old;
@@ -194,15 +194,15 @@ namespace Cccc
             IntPtr screen = Native.GetDC(IntPtr.Zero);
             Hdc = Native.CreateCompatibleDC(screen);
             Native.ReleaseDC(IntPtr.Zero, screen);
-            IntPtr bits;
-            hbmp = Native.CreateDIBSection(Hdc, ref bi, 0, out bits, IntPtr.Zero, 0);
+            hbmp = Native.CreateDIBSection(Hdc, ref bi, 0, out Bits, IntPtr.Zero, 0);
             old = Native.SelectObject(Hdc, hbmp);
-            Bmp = new Bitmap(w, h, w * 4, PixelFormat.Format32bppPArgb, bits);
+            Bmp = new Bitmap(w, h, w * 4, PixelFormat.Format32bppPArgb, Bits);
             G = Graphics.FromImage(Bmp);
             G.SmoothingMode = SmoothingMode.AntiAlias;
             G.PixelOffsetMode = PixelOffsetMode.HighQuality;
             G.InterpolationMode = InterpolationMode.HighQualityBilinear;
-            G.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            // Grid fitting snaps glyphs to whole pixels, so sliding or scaling text would jitter.
+            G.TextRenderingHint = TextRenderingHint.AntiAlias;
         }
 
         public void Dispose()
@@ -301,7 +301,7 @@ namespace Cccc
         }
 
         // Two-layer drop shadow: a wide ambient one and a tight contact one.
-        public static Bitmap Shadow(int w, int h, float s, RectangleF card, float rad, Theme th)
+        public static int[] Shadow(int w, int h, float s, RectangleF card, float rad, Theme th)
         {
             var far = Mask(w, h, s, g => { using (var p = Shapes.RoundRect(Offset(card, 5), rad)) g.FillPath(Brushes.White, p); });
             var near = Mask(w, h, s, g => { using (var p = Shapes.RoundRect(Offset(card, 1), rad)) g.FillPath(Brushes.White, p); });
@@ -313,7 +313,7 @@ namespace Cccc
                 float v = Math.Min(1f, far[i] * th.ShadowFar + near[i] * th.ShadowNear);
                 px[i] = (int)(v * 255 + 0.5f) << 24;
             }
-            return Write(px, w, h, PixelFormat.Format32bppPArgb);
+            return px;
         }
 
         static RectangleF Offset(RectangleF r, float dy) { r.Offset(0, dy); return r; }
