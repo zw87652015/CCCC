@@ -16,6 +16,8 @@ namespace Cccc
         public const int WS_EX_LAYERED = 0x80000, WS_EX_TOOLWINDOW = 0x80, WS_EX_TOPMOST = 0x8, WS_EX_NOACTIVATE = 0x08000000;
         public const int SW_HIDE = 0, SW_SHOWNOACTIVATE = 4;
         public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOACTIVATE = 0x10;
+        public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+        public const int SRCCOPY = 0x00CC0020;
         public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         public static readonly IntPtr HWND_BROADCAST = new IntPtr(0xFFFF);
 
@@ -87,7 +89,9 @@ namespace Cccc
         [DllImport("gdi32.dll")] public static extern bool DeleteDC(IntPtr hdc);
         [DllImport("gdi32.dll")] public static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
         [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr obj);
+        [DllImport("user32.dll")] public static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
         [DllImport("gdi32.dll")] public static extern bool GdiFlush();
+        [DllImport("gdi32.dll")] public static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int sx, int sy, int rop);
         [DllImport("gdi32.dll")] public static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER bmi, uint usage, out IntPtr bits, IntPtr section, uint offset);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr GetModuleHandle(string name);
         [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();

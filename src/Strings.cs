@@ -132,6 +132,7 @@ namespace Cccc
         public static string PaletteGraphite { get { return T("Graphite", "石墨"); } }
         public static string PaletteContrast { get { return T("High contrast", "高对比"); } }
         public static string PalettePastel { get { return T("Pastel", "柔和"); } }
+        public static string PaletteGlass { get { return T("Liquid Glass", "液态玻璃"); } }
         public static string OkColor { get { return T("Success colour", "成功颜色"); } }
         public static string WarnColor { get { return T("Warning colour", "警告颜色"); } }
         public static string ResetColor { get { return T("Reset", "重置"); } }

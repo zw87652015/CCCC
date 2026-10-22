@@ -45,7 +45,7 @@ enum Prefs {
         set { d.set(newValue, forKey: "ThemeMode") }
     }
     static var palette: Int {
-        get { range("Palette", 0, 0, 3) }
+        get { range("Palette", 0, 0, 4) }
         set { d.set(newValue, forKey: "Palette") }
     }
     static var fullPalette: Bool {

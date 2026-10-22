@@ -26,6 +26,11 @@ final class CardPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+// Holds the Liquid Glass material under the drawn card.
+final class CardRoot: NSView {
+    override var isFlipped: Bool { true }
+}
+
 final class CardView: NSView {
     weak var card: Card?
 
@@ -43,11 +48,16 @@ final class CardView: NSView {
 }
 
 final class Card {
-    static let R: CGFloat = 12, CX: CGFloat = 24, CY: CGFloat = 20
+    static let CX: CGFloat = 24, CY: CGFloat = 20
     private static let edge: CGFloat = 16
 
     let panel: CardPanel
+    let root: CardRoot
     let view: CardView
+    private var glass: NSView?
+    private var nativeGlass = false
+    private var glassSig = ""
+    private var glassFrame = CGRect.zero
     var th = Theme.darkTheme
     var visTarget = 0.0
     var renderNow = 0.0
@@ -87,8 +97,11 @@ final class Card {
         self.caps = caps
         let frame = NSRect(x: 0, y: 0, width: 368, height: 134)
         panel = CardPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        root = CardRoot(frame: frame)
+        root.wantsLayer = true
         view = CardView(frame: frame)
-        panel.contentView = view
+        root.addSubview(view)
+        panel.contentView = root
         panel.isFloatingPanel = true
         panel.level = .statusBar
         panel.backgroundColor = .clear
@@ -144,6 +157,75 @@ final class Card {
         let size2 = NSSize(width: canvasW * sc, height: canvasH * sc)
         panel.setContentSize(size2)
         view.frame = NSRect(origin: .zero, size: size2)
+        syncGlass()
+    }
+
+    // Liquid Glass uses the system material under the card: NSGlassEffectView on macOS 26, a blur view before that.
+    private func syncGlass() {
+        guard th.glass && !defaults else {
+            glass?.removeFromSuperview()
+            glass = nil
+            nativeGlass = false
+            glassSig = ""
+            return
+        }
+        let r = min(th.radius, H / 2, W / 2) * sc
+        let sig = "\(th.dark)|\(hexString(th.bg))|\(r)"
+        if glass != nil && sig == glassSig { return }
+        glassSig = sig
+        glass?.removeFromSuperview()
+        var made: NSView?
+        nativeGlass = false
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            let native = NSGlassEffectView()
+            native.cornerRadius = r
+            native.tintColor = th.bg
+            made = native
+            nativeGlass = true
+        }
+        #endif
+        if made == nil {
+            let v = NSVisualEffectView()
+            v.material = .popover
+            v.blendingMode = .behindWindow
+            v.state = .active
+            v.maskImage = Card.roundMask(r)
+            made = v
+        }
+        let g = made!
+        g.appearance = NSAppearance(named: th.dark ? .darkAqua : .aqua)
+        root.addSubview(g, positioned: .below, relativeTo: view)
+        glass = g
+        glassFrame = .zero
+        layoutGlass(renderNow)
+    }
+
+    // Keeps the glass under the card while it grows with a source line or breathes on a repeat copy.
+    private func layoutGlass(_ t: Double) {
+        guard let g = glass else { return }
+        var r = CGRect(x: Card.CX * sc, y: cardTop * sc, width: W * sc, height: cardH * sc)
+        let tp = t - tPop
+        if tp >= 0 && tp < 0.24 {
+            let k = 0.03 * CGFloat(sin(.pi * tp / 0.24))
+            r = r.insetBy(dx: -r.width * k / 2, dy: -r.height * k / 2)
+        }
+        if r != glassFrame {
+            glassFrame = r
+            g.frame = r
+        }
+    }
+
+    private static func roundMask(_ r: CGFloat) -> NSImage {
+        let side = 2 * r + 1
+        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r).fill()
+            return true
+        }
+        img.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
+        img.resizingMode = .stretch
+        return img
     }
 
     private func fonts(_ family: String?) {
@@ -269,6 +351,7 @@ final class Card {
         if vis <= 0 && visTarget <= 0 { hideNow(); return }
 
         renderNow = t
+        layoutGlass(t)
         view.needsDisplay = true
 
         let dy = CGFloat((1 - Ease.outQuint(vis)) * 18) * (slideDown ? -1 : 1)
@@ -312,12 +395,24 @@ final class Card {
         }
 
         let card = CGRect(x: Card.CX, y: cardTop, width: W, height: cardH)
-        let path = Shapes.roundRect(card, Card.R)
+        let rad = th.radius
+        let path = Shapes.roundRect(card, rad)
+        ctx.saveGState()
+        if th.glass {
+            // The shadow stays outside the card so the glass view below shows through.
+            ctx.addRect(CGRect(x: 0, y: 0, width: canvasW, height: canvasH))
+            ctx.addPath(path)
+            ctx.clip(using: .evenOdd)
+        }
         shadowPass(ctx, path, offset: 5, blur: 15, alpha: th.shadowFar, px: px)
         shadowPass(ctx, path, offset: 1, blur: 3, alpha: th.shadowNear, px: px)
-        ctx.setFillColor(th.bg.cgColor)
-        ctx.addPath(path)
-        ctx.fillPath()
+        ctx.restoreGState()
+        if !nativeGlass {
+            // The blur view takes the tint on top; without any glass view the tint is nearly solid.
+            ctx.setFillColor((th.glass && glass == nil ? th.bg.withAlphaComponent(235 / 255) : th.bg).cgColor)
+            ctx.addPath(path)
+            ctx.fillPath()
+        }
         if te >= 0 && te < 0.8 {
             let a = 0.10 * (1 - Ease.outCubic(te / 0.8))
             ctx.setFillColor(accent.withAlphaComponent(CGFloat(a)).cgColor)
@@ -326,14 +421,19 @@ final class Card {
         }
 
         let inset: CGFloat = 0.5
-        ctx.setStrokeColor(th.border.cgColor)
-        ctx.setLineWidth(1)
-        ctx.addPath(Shapes.roundRect(card.insetBy(dx: inset, dy: inset), Card.R - inset))
-        ctx.strokePath()
+        let edge = Shapes.roundRect(card.insetBy(dx: inset, dy: inset), rad - inset)
+        if !th.glass || glass == nil {
+            ctx.setStrokeColor(th.border.cgColor)
+            ctx.setLineWidth(1)
+            ctx.addPath(edge)
+            ctx.strokePath()
+        } else if !nativeGlass {
+            rim(ctx, edge, card)
+        }
 
         let remain = Ease.clamp01((deadline - t) / duration)
         if visTarget > 0 && remain > 0 && !(caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) {
-            let x0 = Card.CX + Card.R, x1 = Card.CX + W - Card.R, y = cardTop + cardH - 3
+            let x0 = Card.CX + rad, x1 = Card.CX + W - rad, y = cardTop + cardH - 3
             ctx.setStrokeColor(accent.withAlphaComponent(th.dark ? 70 / 255 : 60 / 255).cgColor)
             ctx.setLineWidth(2)
             ctx.setLineCap(.round)
@@ -350,9 +450,23 @@ final class Card {
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: 0, height: -offset * px), blur: blur * px,
                       color: NSColor.black.withAlphaComponent(alpha).cgColor)
-        ctx.setFillColor(th.bg.cgColor)
+        ctx.setFillColor(th.glass ? NSColor.black.cgColor : th.bg.cgColor)
         ctx.addPath(path)
         ctx.fillPath()
+        ctx.restoreGState()
+    }
+
+    // Specular edge for the pre-macOS 26 blur view: bright toward the top-left and bottom-right.
+    private func rim(_ ctx: CGContext, _ edge: CGPath, _ card: CGRect) {
+        let hi: CGFloat = th.dark ? 0.55 : 0.9, lo: CGFloat = th.dark ? 0.08 : 0.2
+        let colors = [hi, lo, hi * 0.6].map { NSColor.white.withAlphaComponent($0).cgColor }
+        let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: colors as CFArray, locations: [0, 0.5, 1])!
+        ctx.saveGState()
+        ctx.addPath(edge)
+        ctx.setLineWidth(1)
+        ctx.replacePathWithStrokedPath()
+        ctx.clip()
+        ctx.drawLinearGradient(g, start: CGPoint(x: card.minX, y: card.minY), end: CGPoint(x: card.maxX, y: card.maxY), options: [])
         ctx.restoreGState()
     }
 

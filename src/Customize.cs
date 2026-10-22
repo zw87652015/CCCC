@@ -77,7 +77,7 @@ namespace Cccc
         readonly List<string> fonts = new List<string>();
         readonly List<Button> presetButtons = new List<Button>();
         readonly Colour[] colours = new Colour[7];
-        readonly Button[] tiles = new Button[4];
+        readonly Button[] tiles = new Button[5];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
         CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay;
@@ -535,8 +535,8 @@ namespace Cccc
             for (int i = 0; i < 3; i++) { int idx = i; BindRadio(rbTheme[i], delegate { set.ThemeMode = idx; }); }
 
             var tileRow = new WrapPanel();
-            string[] tileNames = { L.PaletteDefault, L.PaletteGraphite, L.PaletteContrast, L.PalettePastel };
-            for (int p = 0; p < 4; p++)
+            string[] tileNames = { L.PaletteDefault, L.PaletteGraphite, L.PaletteContrast, L.PalettePastel, L.PaletteGlass };
+            for (int p = 0; p < tiles.Length; p++)
             {
                 int idx = p;
                 var b = new Button { Style = Res<Style>("PaletteTile"), Margin = new Thickness(0, 0, 10, 0), Cursor = System.Windows.Input.Cursors.Hand };
@@ -751,6 +751,22 @@ namespace Cccc
             g.Children.Add(bar1); Canvas.SetLeft(bar1, 26); Canvas.SetTop(bar1, 10);
             g.Children.Add(bar2); Canvas.SetLeft(bar2, 26); Canvas.SetTop(bar2, 22);
             mini.Child = g;
+            if (t.Glass)
+            {
+                // A tinted pane with a bright rim over a colourful backdrop.
+                mini.Background = new LinearGradientBrush(Color.FromRgb(0x4F, 0x8D, 0xFF), Color.FromRgb(0xFF, 0x9A, 0x6B), 35);
+                mini.BorderBrush = Tint(t.Border);
+                var rim = new LinearGradientBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), 60);
+                var pane = new Border { Margin = new Thickness(5, 7, 5, 7), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1),
+                                        Background = Tint(System.Drawing.Color.FromArgb(dark ? 150 : 165, t.Bg)), BorderBrush = rim };
+                g.Width = 82; g.Height = 42;
+                Canvas.SetLeft(dot, 7); Canvas.SetTop(dot, 7);
+                Canvas.SetLeft(bar1, 25); Canvas.SetTop(bar1, 9);
+                Canvas.SetLeft(bar2, 25); Canvas.SetTop(bar2, 21);
+                bar2.Width = 48;
+                mini.Child = pane;
+                pane.Child = g;
+            }
             var caption = new TextBlock { Text = name, HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12,
                                           Margin = new Thickness(0, 6, 0, 0), Style = Res<Style>("ValueText") };
             caption.VerticalAlignment = VerticalAlignment.Top;

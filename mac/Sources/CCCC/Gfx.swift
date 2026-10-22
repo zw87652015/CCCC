@@ -42,6 +42,8 @@ struct Theme {
     let dark: Bool
     let bg, border, title, sub, meta, ok, warn: NSColor
     let shadowFar, shadowNear: CGFloat
+    var glass = false
+    var radius: CGFloat = 12
 
     static let darkTheme = Theme(
         dark: true,
@@ -54,6 +56,19 @@ struct Theme {
         bg: rgba(252, 252, 253), border: rgba(0, 0, 0, 24), title: rgba(22, 22, 26),
         sub: rgba(98, 98, 106), meta: rgba(150, 150, 158), ok: rgba(30, 168, 74), warn: rgba(232, 138, 0),
         shadowFar: 0.22, shadowNear: 0.12)
+
+    // Liquid Glass (palette 4): bg tints the system glass behind the card.
+    static let glassDark = Theme(
+        dark: true,
+        bg: rgba(14, 14, 18, 92), border: rgba(255, 255, 255, 56), title: rgba(255, 255, 255),
+        sub: rgba(222, 222, 230), meta: rgba(172, 172, 182), ok: rgba(48, 209, 88), warn: rgba(255, 172, 28),
+        shadowFar: 0.30, shadowNear: 0.16, glass: true, radius: 20)
+
+    static let glassLight = Theme(
+        dark: false,
+        bg: rgba(255, 255, 255, 104), border: rgba(0, 0, 0, 36), title: rgba(10, 10, 14),
+        sub: rgba(46, 46, 54), meta: rgba(96, 96, 106), ok: rgba(30, 168, 74), warn: rgba(226, 132, 0),
+        shadowFar: 0.14, shadowNear: 0.07, glass: true, radius: 20)
 
     // Palette index 1..3 as Prefs.palette; dark then light for each.
     private static func make(_ dark: Bool, _ bg: NSColor, _ border: NSColor, _ title: NSColor, _ sub: NSColor,
@@ -73,6 +88,7 @@ struct Theme {
 
     static func palette(_ p: Int, dark: Bool) -> Theme {
         if p == 0 { return dark ? darkTheme : lightTheme }
+        if p == 4 { return dark ? glassDark : glassLight }
         return palettes[(p - 1) * 2 + (dark ? 0 : 1)]
     }
 
@@ -84,17 +100,18 @@ struct Theme {
         let ok = hexColor(Prefs.okColor) ?? v.ok
         let warn = hexColor(Prefs.warnColor) ?? v.warn
         if Prefs.fullPalette {
-            bg = hexColor(Prefs.bgColor) ?? bg
+            bg = hexColor(Prefs.bgColor).map { v.glass ? $0.withAlphaComponent(v.bg.alphaComponent) : $0 } ?? bg
             border = hexColor(Prefs.borderColor) ?? border
             title = hexColor(Prefs.titleColor) ?? title
             sub = hexColor(Prefs.subColor) ?? sub
             meta = hexColor(Prefs.metaColor) ?? meta
         }
         let isDark = luminance(bg) < 0.5
-        let far = isDark == v.dark ? v.shadowFar : (isDark ? darkTheme.shadowFar : lightTheme.shadowFar)
-        let near = isDark == v.dark ? v.shadowNear : (isDark ? darkTheme.shadowNear : lightTheme.shadowNear)
+        let pair = v.glass ? (isDark ? glassDark : glassLight) : (isDark ? darkTheme : lightTheme)
+        let far = isDark == v.dark ? v.shadowFar : pair.shadowFar
+        let near = isDark == v.dark ? v.shadowNear : pair.shadowNear
         return Theme(dark: isDark, bg: bg, border: border, title: title, sub: sub, meta: meta, ok: ok, warn: warn,
-                     shadowFar: far, shadowNear: near)
+                     shadowFar: far, shadowNear: near, glass: v.glass, radius: v.radius)
     }
 
     // Dark glyph on bright accents, white otherwise.

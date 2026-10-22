@@ -52,7 +52,7 @@ namespace Cccc
                 s.StayUntilClicked = Flag(k, "StayUntilClicked", s.StayUntilClicked);
                 s.CapsStayUntilClicked = Flag(k, "CapsStayUntilClicked", s.CapsStayUntilClicked);
                 s.ThemeMode = Num(k, "ThemeMode", s.ThemeMode, 0, 2);
-                s.Palette = Num(k, "Palette", s.Palette, 0, 3);
+                s.Palette = Num(k, "Palette", s.Palette, 0, 4);
                 s.DurationMs = Num(k, "DurationMs", s.DurationMs, 500, 10000);
                 s.CapsDurationMs = Num(k, "CapsDurationMs", s.CapsDurationMs, 500, 10000);
                 s.Position = Num(k, "Position", s.Position, 0, 10);

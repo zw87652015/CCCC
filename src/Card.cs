@@ -26,8 +26,9 @@ namespace Cccc
 
     sealed class Card : NativeWindow
     {
-        public const float R = 12, CX = 24, CY = 20;
+        public const float CX = 24, CY = 20;
         const float Edge = 16;
+        float R { get { return th.Radius; } }
 
         public float W, H, Line, HMax, CanvasW, CanvasH;
         public float DpiScale = 1;
@@ -48,6 +49,8 @@ namespace Cccc
         Bitmap shadow;
         int[] shadowPx;
         float shadowH;
+        float[][] backdrop;
+        double lastCapture;
         Theme th = Theme.DarkTheme, shadowTheme;
         Content cur;
         bool shown, repeatHit, hoverArmed;
@@ -118,6 +121,7 @@ namespace Cccc
             Native.GetCursorPos(out p);
             baseX = p.X - Px(CX) - dragOffX;
             baseY = p.Y - Px(Top) - dragOffY;
+            if (th.Glass && Now - lastCapture > 0.05) CaptureBackdrop();
         }
 
         void EndDrag()
@@ -127,6 +131,7 @@ namespace Cccc
             int moved = Math.Abs(p.X - dragStart.X) + Math.Abs(p.Y - dragStart.Y);
             Native.ReleaseCapture();
             drag = false;
+            if (th.Glass) CaptureBackdrop();
             if (moved > 4)
             {
                 int sx = baseX + Px(CX), sy = baseY + Px(CY);
@@ -199,6 +204,7 @@ namespace Cccc
                 Resolve(sys);
             }
             Layout(DpiScale * st.Scale / 100f, resolved);
+            if (th.Glass && backdrop == null && shown) CaptureBackdrop();
         }
 
         void Resolve(bool light)
@@ -239,6 +245,7 @@ namespace Cccc
             double now = Now;
             bool fresh = !shown;
             if (fresh || placeSig != PlaceSig()) Prepare();
+            if (th.Glass) CaptureBackdrop();
 
             string oldTitle = cur != null ? cur.Title : null;
             if (cur != null && cur.Thumb != null && cur.Thumb != c.Thumb) cur.Thumb.Dispose();
@@ -323,16 +330,38 @@ namespace Cccc
                 s = scale;
                 surf = new Surface((int)Math.Ceiling(CanvasW * s), (int)Math.Ceiling(CanvasH * s));
                 shadowTheme = null;
+                backdrop = null;
             }
             th = theme;
+            if (!theme.Glass) backdrop = null;
             if (shadowTheme != theme || shadowH != CardH)
             {
                 if (shadow != null) shadow.Dispose();
-                shadowPx = Alpha.Shadow(surf.W, surf.H, s, new RectangleF(CX, Top, W, CardH), R, theme);
+                var card = new RectangleF(CX, Top, W, CardH);
+                shadowPx = Alpha.Shadow(surf.W, surf.H, s, card, R, theme);
+                if (backdrop != null) shadowPx = GlassLayer.Compose(backdrop, shadowPx, surf.W, surf.H, s, card, R, theme);
                 shadow = Alpha.Write(shadowPx, surf.W, surf.H, PixelFormat.Format32bppPArgb);
                 shadowTheme = theme;
                 shadowH = CardH;
             }
+        }
+
+        // Grabs the screen behind the card's resting spot; a visible card leaves itself out of the capture.
+        void CaptureBackdrop()
+        {
+            lastCapture = Now;
+            int[] px = Handle == IntPtr.Zero ? null : GlassLayer.Capture(shown ? Handle : IntPtr.Zero, baseX, baseY, surf.W, surf.H);
+            backdrop = px != null ? GlassLayer.Blur(px, surf.W, surf.H, s) : null;
+            shadowTheme = null;
+        }
+
+        // For the design sheet: the `w`-pixel-wide image `px` stands in for the screen under a canvas at (x, y).
+        public void Backdrop(int[] px, int w, int x, int y)
+        {
+            var part = new int[surf.W * surf.H];
+            for (int r = 0; r < surf.H; r++) Array.Copy(px, (y + r) * w + x, part, r * surf.W, surf.W);
+            backdrop = GlassLayer.Blur(part, surf.W, surf.H, s);
+            shadowTheme = null;
         }
 
         int Px(float dip) { return (int)Math.Round(dip * s); }
@@ -417,7 +446,7 @@ namespace Cccc
             Graphics g = surf.G;
             g.ResetTransform();
             if (cur == null) { g.Clear(Color.Transparent); return; }
-            if (shadowH != CardH) Layout(s, th);
+            if (shadowH != CardH || shadowTheme != th) Layout(s, th);
 
             bool warn = cur.Kind == Kind.Fail || cur.Kind == Kind.Empty;
             Color accent = cur.Kind == Kind.Caps ? (cur.CapsOn ? th.Ok : th.Meta) : (warn ? th.Warn : th.Ok);
@@ -442,10 +471,13 @@ namespace Cccc
             }
             g.ScaleTransform(s, s);
 
+            // Glass is already in the shadow layer; without a backdrop it falls back to a nearly solid tint.
+            bool glass = th.Glass && backdrop != null;
             var card = new RectangleF(CX, Top, W, CardH);
             using (var path = Shapes.RoundRect(card, R))
             {
-                using (var b = new SolidBrush(th.Bg)) g.FillPath(b, path);
+                if (!glass)
+                    using (var b = new SolidBrush(th.Glass ? Color.FromArgb(235, th.Bg) : th.Bg)) g.FillPath(b, path);
                 if (te >= 0 && te < 0.8)
                 {
                     int a = (int)(255 * 0.10 * (1 - Ease.OutCubic(te / 0.8)));
@@ -453,9 +485,10 @@ namespace Cccc
                 }
             }
             float inset = 0.5f / s;
-            using (var path = Shapes.RoundRect(RectangleF.Inflate(card, -inset, -inset), R - inset))
-            using (var pen = new Pen(th.Border, 1f / s))
-                g.DrawPath(pen, path);
+            if (!glass)
+                using (var path = Shapes.RoundRect(RectangleF.Inflate(card, -inset, -inset), R - inset))
+                using (var pen = new Pen(th.Border, 1f / s))
+                    g.DrawPath(pen, path);
 
             double remain = Ease.Clamp01((deadline - now) / duration);
             if (visTarget > 0 && remain > 0 && !(caps ? st.CapsStayUntilClicked : st.StayUntilClicked))

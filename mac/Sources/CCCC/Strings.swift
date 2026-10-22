@@ -137,6 +137,7 @@ enum L {
     static var paletteGraphite: String { t("Graphite", "石墨") }
     static var paletteContrast: String { t("High contrast", "高对比") }
     static var palettePastel: String { t("Pastel", "柔和") }
+    static var paletteGlass: String { t("Liquid Glass", "液态玻璃") }
     static var okColorTitle: String { t("Success colour", "成功颜色") }
     static var warnColorTitle: String { t("Warning colour", "警告颜色") }
     static var resetColor: String { t("Reset", "重置") }

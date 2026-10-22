@@ -387,7 +387,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
 
     private func appearancePage() -> NSView {
         popTheme = popup([L.themeSystem, L.themeLight, L.themeDark]) { c in Prefs.themeMode = Customize.popIndex(c) }
-        popPalette = popup([L.paletteDefault, L.paletteGraphite, L.paletteContrast, L.palettePastel]) { c in Prefs.palette = Customize.popIndex(c) }
+        popPalette = popup([L.paletteDefault, L.paletteGraphite, L.paletteContrast, L.palettePastel, L.paletteGlass]) { c in Prefs.palette = Customize.popIndex(c) }
         let ok = colourRow(L.okColorTitle, full: false, get: { Prefs.okColor }, put: { Prefs.okColor = $0 }, pick: { $0.ok })
         let warn = colourRow(L.warnColorTitle, full: false, get: { Prefs.warnColor }, put: { Prefs.warnColor = $0 }, pick: { $0.warn })
         chkFull = check(L.fullColors) { c in Prefs.fullPalette = Customize.isOn(c) }

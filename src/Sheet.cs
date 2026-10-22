@@ -16,16 +16,19 @@ namespace Cccc
             int cw = (int)Math.Ceiling(card.CanvasW * s), ch = (int)Math.Ceiling(card.CanvasH * s);
             var rows = Rows();
             int iconRow = 120;
-            using (var sheet = new Bitmap(cw * 2, ch * rows.Length + iconRow, PixelFormat.Format32bppArgb))
+            using (var sheet = new Bitmap(cw * 4, ch * rows.Length + iconRow, PixelFormat.Format32bppArgb))
             using (var g = Graphics.FromImage(sheet))
             {
                 using (var b = new LinearGradientBrush(new Rectangle(0, 0, cw, sheet.Height), Color.FromArgb(28, 34, 52), Color.FromArgb(52, 40, 64), 90f))
                     g.FillRectangle(b, 0, 0, cw, sheet.Height);
                 using (var b = new LinearGradientBrush(new Rectangle(cw, 0, cw, sheet.Height), Color.FromArgb(206, 218, 236), Color.FromArgb(232, 220, 226), 90f))
                     g.FillRectangle(b, cw, 0, cw, sheet.Height);
+                Wallpaper(g, new Rectangle(cw * 2, 0, cw, sheet.Height), true);
+                Wallpaper(g, new Rectangle(cw * 3, 0, cw, sheet.Height), false);
+                int[] wall = Alpha.Read(sheet);
 
-                var themes = new[] { Theme.DarkTheme, Theme.LightTheme };
-                for (int col = 0; col < 2; col++)
+                var themes = new[] { Theme.DarkTheme, Theme.LightTheme, Theme.GlassDark, Theme.GlassLight };
+                for (int col = 0; col < themes.Length; col++)
                 {
                     card.Layout(s, themes[col]);
                     capsCard.Layout(s, themes[col]);
@@ -33,8 +36,10 @@ namespace Cccc
                     {
                         var r = rows[row];
                         var which = r.Item1.Kind == Kind.Caps ? capsCard : card;
+                        int px = col * cw, py = row * ch + ch - (int)Math.Ceiling(which.CanvasH * s);
+                        if (themes[col].Glass) which.Backdrop(wall, sheet.Width, px, py);
                         which.Still(r.Item1, r.Item2, r.Item3);
-                        g.DrawImage(which.Pixels, col * cw, row * ch + ch - (int)Math.Ceiling(which.CanvasH * s));
+                        g.DrawImage(which.Pixels, px, py);
                     }
                 }
 
@@ -49,6 +54,33 @@ namespace Cccc
                 }
                 sheet.Save(path, ImageFormat.Png);
             }
+        }
+
+        // A busy, colourful backdrop with hard edges, so the glass blur and rim bending show.
+        static void Wallpaper(Graphics g, Rectangle r, bool dark)
+        {
+            Color a = dark ? Color.FromArgb(20, 40, 110) : Color.FromArgb(120, 180, 255);
+            Color b = dark ? Color.FromArgb(120, 30, 90) : Color.FromArgb(255, 170, 120);
+            using (var br = new LinearGradientBrush(r, a, b, 60f)) g.FillRectangle(br, r);
+            var state = g.Save();
+            g.SetClip(r);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rnd = new Random(7);
+            for (int y = r.Top - 40; y < r.Bottom; y += 70)
+            {
+                int x = r.Left + rnd.Next(-60, r.Width);
+                int d = rnd.Next(40, 110);
+                Color c = Color.FromArgb(dark ? 150 : 170, rnd.Next(60, 256), rnd.Next(60, 256), rnd.Next(60, 256));
+                using (var br = new SolidBrush(c)) g.FillEllipse(br, x, y, d, d);
+            }
+            using (var pen = new Pen(Color.FromArgb(dark ? 90 : 120, 255, 255, 255), 6))
+                for (int x = r.Left - r.Height; x < r.Right; x += 46)
+                    g.DrawLine(pen, x, r.Top, x + r.Height, r.Bottom);
+            using (var font = new Font("Segoe UI Semibold", 22f, GraphicsUnit.Pixel))
+            using (var br = new SolidBrush(dark ? Color.White : Color.FromArgb(20, 20, 30)))
+                for (int y = r.Top + 30; y < r.Bottom; y += 95)
+                    g.DrawString("Liquid Glass  液态玻璃  CCCC", font, br, r.Left + 14, y);
+            g.Restore(state);
         }
 
         static Tuple<Content, bool, double>[] Rows()
