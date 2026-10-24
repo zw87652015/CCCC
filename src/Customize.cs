@@ -18,7 +18,7 @@ namespace Cccc
 {
     // Windows 11 style settings window (WPF). Every control writes straight into the settings and calls `changed`;
     // `loading` blocks those writes while Reload pushes values back.
-    sealed class Customize
+    sealed partial class Customize
     {
         sealed class Colour
         {
@@ -65,6 +65,7 @@ namespace Cccc
         readonly Action changed;
         readonly Action<bool> showSample, test;
         readonly Action showCaps;
+        readonly Action<bool> manualPause;
         readonly Card card = new Card();
         readonly Window w;
         readonly DispatcherTimer armTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
@@ -99,13 +100,14 @@ namespace Cccc
         bool loading, armed, dark, builtZh, expanded, lastFull, popLoading, switching;
         int page;
 
-        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action<bool> onTest)
+        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action<bool> onTest, Action<bool> onManualPause = null)
         {
             set = settings;
             changed = onChanged;
             showSample = onShowSample;
             showCaps = onShowCaps;
             test = onTest;
+            manualPause = onManualPause ?? (v => { set.Paused = v; set.PauseUntilUtc = null; });
 
             using (var s = typeof(Customize).Assembly.GetManifestResourceStream("Cccc.Customize.xaml"))
                 w = (Window)XamlReader.Load(s);
@@ -503,7 +505,7 @@ namespace Cccc
             chkWarn = Toggle();
             chkStart = Toggle();
             chkAuto = Toggle();
-            BindToggle(chkPause, v => set.Paused = v);
+            BindToggle(chkPause, v => manualPause(v));
             BindToggle(chkWarn, v => set.FailHint = v);
             BindToggle(chkStart, v => Settings.AutoStart = v);
             BindToggle(chkAuto, v => set.AutoUpdate = v);
@@ -524,7 +526,8 @@ namespace Cccc
                 ignoreList,
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
-                SettingCard(L.MenuLanguage, L.HintLanguage, langSeg));
+                SettingCard(L.MenuLanguage, L.HintLanguage, langSeg),
+                BuildConfigControls());
         }
 
         StackPanel BuildAppearance()

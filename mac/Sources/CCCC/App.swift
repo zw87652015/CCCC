@@ -75,6 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var debounce: Timer?
     private var failCheck: Timer?
     private var updateTimer: Timer?
+    private var pauseTimer: Timer?
+    private let pauseControl = PauseControl()
+    private var timedPauseItems: [NSMenuItem] = []
+    private var miResume: NSMenuItem!
 
     private var lastSig: String?, lastHold: String?
     private var lastTime = -99.0, lastFail = -99.0
@@ -103,6 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         L.apply(Prefs.lang == "auto" ? nil : Prefs.lang)
         sounds.load(okFile: Prefs.soundOkFile, failFile: Prefs.soundFailFile)
         buildMenu()
+        pauseControl.changed = { [weak self] in self?.pauseChanged() }
+        updatePauseTimer()
         statusItem.button?.image = trayIcon
         statusItem.button?.target = self
         statusItem.button?.action = #selector(statusClicked)
@@ -159,6 +165,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func buildMenu() {
         miShow = item(#selector(showClipboardAction))
         miPause = item(#selector(togglePause))
+        timedPauseItems = [15, 30, 60].map { minutes in
+            let entry = item(#selector(startTimedPause(_:)))
+            entry.tag = minutes
+            return entry
+        }
+        miResume = item(#selector(resumeNow))
         miSound = item(#selector(toggleSound))
         miStopSounds = item(#selector(stopSoundsAction))
         miStopSounds.isEnabled = false
@@ -205,6 +217,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miCaps, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
             menu.addItem(entry ?? .separator())
         }
+        for (index, entry) in (timedPauseItems + [miResume!]).enumerated() {
+            menu.insertItem(entry, at: 3 + index)
+        }
         menu.delegate = self
     }
 
@@ -226,6 +241,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         customize?.reload()
         miShow.title = L.menuShow
         miPause.title = L.menuPause
+        for entry in timedPauseItems { entry.title = L.pauseFor(entry.tag) }
+        miResume.title = L.resumeNow
+        miResume.isEnabled = Prefs.paused
         miSound.title = L.menuSound
         miStopSounds.title = L.menuStopSounds
         miHint.title = L.menuHint
@@ -266,6 +284,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         statusItem.button?.appearsDisabled = Prefs.paused
         statusItem.button?.toolTip = Prefs.paused ? L.tipPaused : L.tip
+        if let deadline = pauseControl.deadline {
+            statusItem.button?.toolTip = L.resumeAt(DateFormatter.localizedString(from: deadline, dateStyle: .short, timeStyle: .short))
+        }
     }
 
     @objc private func statusClicked() {
@@ -284,7 +305,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func showClipboardAction() { showClipboard() }
 
     @objc private func togglePause() {
-        Prefs.paused.toggle()
+        pauseControl.setManual(!Prefs.paused)
+    }
+
+    @objc private func startTimedPause(_ sender: NSMenuItem) { pauseControl.start(minutes: sender.tag) }
+    @objc private func resumeNow() { pauseControl.setManual(false) }
+
+    private func updatePauseTimer() {
+        pauseTimer?.invalidate()
+        pauseTimer = nil
+        guard pauseControl.deadline != nil else { return }
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.pauseControl.check() }
+        RunLoop.main.add(timer, forMode: .common)
+        pauseTimer = timer
+    }
+
+    private func pauseChanged() {
+        if Prefs.paused {
+            debounce?.invalidate()
+            debounce = nil
+            failCheck?.invalidate()
+            failCheck = nil
+            card.dismiss()
+            capsCard.dismiss()
+            sounds.stopAll()
+        }
+        updatePauseTimer()
         sync()
     }
 
@@ -366,7 +412,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onTest: { [weak self] ok in
                     if ok { self?.sounds.playOk() } else { self?.sounds.playNo() }
                 },
-                onClose: { [weak self] in self?.customize = nil })
+                onClose: { [weak self] in self?.customize = nil },
+                onPause: { [weak self] paused in self?.pauseControl.setManual(paused) })
         }
         customize?.show()
     }
@@ -541,6 +588,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func onFailCheck() {
+        guard !Prefs.paused, Prefs.failHint else { return }
         if NSPasteboard.general.changeCount != keySeq {
             dbg("fail check: clipboard changed, copy succeeded")
             return

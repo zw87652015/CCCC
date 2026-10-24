@@ -8,6 +8,10 @@ enum Prefs {
         get { d.bool(forKey: "Paused") }
         set { d.set(newValue, forKey: "Paused") }
     }
+    static var pauseUntilUtc: String? {
+        get { d.string(forKey: "PauseUntilUtc") }
+        set { d.set(newValue, forKey: "PauseUntilUtc") }
+    }
     static var sound: Bool {
         get { d.bool(forKey: "Sound") }
         set { d.set(newValue, forKey: "Sound") }

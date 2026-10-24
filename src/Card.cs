@@ -419,6 +419,12 @@ namespace Cccc
             Native.UpdateLayeredWindow(Handle, IntPtr.Zero, ref dst, ref size, surf.Hdc, ref src, 0, ref bf, 2);
         }
 
+        public void Dismiss()
+        {
+            vis = visTarget = 0;
+            if (shown) HideNow();
+        }
+
         void HideNow()
         {
             vsync.Stop();
