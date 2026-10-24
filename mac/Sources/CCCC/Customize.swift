@@ -55,9 +55,13 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private let onShowCaps: () -> Void
     private let onTest: (Bool) -> Void
     private let onClose: () -> Void
+    private let onPause: (Bool) -> Void
     private var acts: [Act] = []
     private var ignoreActs: [Act] = []
     private var loading = false
+    private var renderedZh = L.zh
+    private var actionDepth = 0
+    private var localizationScheduled = false
     private var fontFamilies: [String] = []
 
     private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
@@ -77,12 +81,14 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private var tabsView: NSTabView!
 
     init(onChange: @escaping () -> Void, onShowSample: @escaping (Bool) -> Void, onShowCaps: @escaping () -> Void,
-         onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void) {
+         onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void,
+         onPause: @escaping (Bool) -> Void = { PauseControl().setManual($0) }) {
         self.onChange = onChange
         self.onShowSample = onShowSample
         self.onShowCaps = onShowCaps
         self.onTest = onTest
         self.onClose = onClose
+        self.onPause = onPause
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
@@ -106,9 +112,39 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     // MARK: Wiring
 
     private func act(_ run: @escaping () -> Void) -> Act {
-        let a = Act(run)
+        let a = Act { [weak self] in
+            guard let self = self else { return }
+            self.actionDepth += 1
+            defer {
+                self.actionDepth -= 1
+                self.scheduleLocalization()
+            }
+            run()
+        }
         acts.append(a)
         return a
+    }
+
+    // Build new controls only after the current control action (including modal
+    // dialogs) finishes. Nested sync/reload calls keep using the existing controls.
+    private func scheduleLocalization() {
+        guard renderedZh != L.zh, actionDepth == 0, !localizationScheduled else { return }
+        localizationScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.localizationScheduled = false
+            guard self.actionDepth == 0, self.renderedZh != L.zh else { return }
+            let selected = self.tabsView.selectedTabViewItem.map { self.tabsView.indexOfTabViewItem($0) } ?? 0
+            self.acts.removeAll()
+            self.ignoreActs.removeAll()
+            self.colours.removeAll()
+            self.sounds.removeAll()
+            self.renderedZh = L.zh
+            self.window.title = L.customizeTitle
+            self.window.contentView = self.buildContent()
+            self.tabsView.selectTabViewItem(at: selected)
+            self.reload()
+        }
     }
 
     private func wire(_ c: NSControl, _ f: @escaping (NSControl) -> Void) {
@@ -282,7 +318,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     }
 
     private func generalPage() -> NSView {
-        chkPause = check(L.menuPause) { c in Prefs.paused = Customize.isOn(c) }
+        chkPause = check(L.menuPause) { [weak self] c in self?.onPause(Customize.isOn(c)) }
         chkWarn = check(L.menuHint) { c in Prefs.failHint = Customize.isOn(c) }
         chkStart = check(L.menuStartup) { c in _ = try? Prefs.setAutoStart(Customize.isOn(c)) }
         chkAuto = check(L.menuAutoUpdate) { c in Prefs.autoUpdate = Customize.isOn(c) }
@@ -297,7 +333,76 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         hintIgnore.textColor = .secondaryLabelColor
         hintIgnore.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         ignoreList = column([], spacing: 6)
-        return page([chkPause, chkWarn, row(L.ignoreApps, [popIgnore]), hintIgnore, ignoreList, chkStart, chkAuto, row(L.menuLanguage, [popLang])])
+        let export = NSButton(title: L.exportSettings, target: nil, action: nil)
+        export.target = act { [weak self] in self?.exportSettings() }
+        export.action = #selector(Act.fire(_:))
+        let importing = NSButton(title: L.importSettings, target: nil, action: nil)
+        importing.target = act { [weak self] in self?.importSettings() }
+        importing.action = #selector(Act.fire(_:))
+        return page([chkPause, chkWarn, row(L.ignoreApps, [popIgnore]), hintIgnore, ignoreList, chkStart, chkAuto, row(L.menuLanguage, [popLang]), row("", [export, importing])])
+    }
+
+    private func settingsMessage(_ title: String, _ message: String = "") {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.runModal()
+    }
+
+    private func exportSettings() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        panel.nameFieldStringValue = "CCCC-settings-\(formatter.string(from: Date())).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try ConfigFile.write(ConfigFile.export(), to: url)
+            settingsMessage(L.settingsExported)
+        } catch { settingsMessage(L.settingsError, error.localizedDescription) }
+    }
+
+    private func importSettings() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            var candidate = try ConfigFile.read(url)
+            // Resource checks never execute a path or inspect clipboard data.
+            for key in ["SoundOkFile", "SoundFailFile"] where candidate.importedKeys.contains(key) {
+                if let path = candidate.values[key] as? String,
+                   NSSound(contentsOf: URL(fileURLWithPath: path), byReference: true) == nil {
+                    candidate.values[key] = NSNull()
+                    candidate.fallbacks.append(key)
+                }
+            }
+            if candidate.importedKeys.contains("FontFamily"), let family = candidate.values["FontFamily"] as? String,
+               !NSFontManager.shared.availableFontFamilies.contains(family) {
+                candidate.values["FontFamily"] = NSNull()
+                candidate.fallbacks.append("FontFamily")
+            }
+            let confirm = NSAlert()
+            confirm.messageText = L.importSettings
+            confirm.informativeText = L.importConfirm
+            confirm.addButton(withTitle: L.confirmImport)
+            confirm.addButton(withTitle: L.cancelImport)
+            guard confirm.runModal() == .alertFirstButtonReturn else { return }
+            let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            let backup = support.appendingPathComponent("CCCC", isDirectory: true).appendingPathComponent("settings-before-import.json")
+            try ConfigFile.apply(candidate, backupURL: backup, save: {
+                guard UserDefaults.standard.synchronize() else { return false }
+                self.changed()
+                return true
+            })
+            var message = L.settingsBackup + backup.path
+            if !candidate.fallbacks.isEmpty {
+                message += "\n\n" + L.resourceFallback + candidate.fallbacks.joined(separator: ", ")
+            }
+            settingsMessage(L.settingsImported, message)
+        } catch { settingsMessage(L.settingsError, error.localizedDescription) }
     }
 
     // MARK: Ignored apps
@@ -600,6 +705,8 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     // MARK: Sync and preview
 
     func reload() {
+        guard !loading else { return }
+        scheduleLocalization()
         loading = true
         chkPause.state = Prefs.paused ? .on : .off
         chkWarn.state = Prefs.failHint ? .on : .off

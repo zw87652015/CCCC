@@ -64,6 +64,19 @@ namespace Cccc
 
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }
+        public static string MenuTimedPause { get { return T("Pause for", "定时暂停"); } }
+        public static string PauseMinutes(int minutes) { return T(minutes + " minutes", minutes + " 分钟"); }
+        public static string MenuResume { get { return T("Resume now", "立即恢复"); } }
+        public static string TipPausedUntil(DateTime time) { return T("CCCC · paused until ", "CCCC · 暂停至 ") + time.ToString("HH:mm"); }
+        public static string ConfigTitle { get { return T("Configuration backup", "配置备份"); } }
+        public static string ExportConfig { get { return T("Export settings…", "导出配置…"); } }
+        public static string ImportConfig { get { return T("Import settings…", "导入配置…"); } }
+        public static string ConfigHint { get { return T("Back up appearance, behavior, sounds and ignored apps", "备份外观、提醒行为、声音和忽略应用"); } }
+        public static string ConfigConfirm { get { return T("Replace preferences from this file? This covers appearance, behavior, sounds, language, update checks and ignored apps. Startup, permissions and pause stay unchanged. A backup is saved before importing.", "使用此文件替换配置？范围包含外观、提醒行为、声音、语言、更新检查和忽略应用。自启动、授权及暂停状态保持不变，导入前会自动备份。"); } }
+        public static string ConfigExported { get { return T("Settings exported.", "配置已导出。"); } }
+        public static string ConfigImported { get { return T("Settings imported. Previous settings saved to:", "配置已导入。原配置已备份至："); } }
+        public static string ConfigFallback { get { return T("Unavailable fonts or sound files were reset to defaults:", "以下字体或声音文件不可用，已恢复默认："); } }
+        public static string ConfigFailed { get { return T("Configuration operation failed:", "配置操作失败："); } }
         public static string MenuSound { get { return T("Sound", "提示音"); } }
         public static string MenuStopSounds { get { return T("Stop all sounds", "停止所有声音"); } }
         public static string MenuHint { get { return T("Warn when nothing was copied", "没复制上时提醒我"); } }

@@ -19,6 +19,10 @@ namespace Cccc
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
         readonly Timer updateTimer = new Timer { Interval = 10000 };
+        readonly Timer pauseTimer = new Timer { Interval = 1000 };
+        readonly PauseControl pause;
+        readonly MenuItem miPauseFor, miResume;
+        readonly MenuItem[] miPauseTimes = new MenuItem[3];
         readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
         readonly MenuItem[] miDetails = new MenuItem[4];
         readonly MenuItem miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miCustomize, miUpdate, miQuit;
@@ -41,6 +45,7 @@ namespace Cccc
         public App(bool silent, bool updated)
         {
             ui = new WindowsFormsSynchronizationContext();
+            pause = new PauseControl(set, () => DateTime.UtcNow);
             L.Apply(set.Lang);
             sounds.Load(set.SoundOkFile, set.SoundFailFile);
             card.CreateWindow();
@@ -68,7 +73,15 @@ namespace Cccc
             updateTimer.Tick += delegate { updateTimer.Interval = 24 * 60 * 60 * 1000; if (set.AutoUpdate) CheckUpdate(false); };
 
             miShow = new MenuItem(L.MenuShow, delegate { ShowClipboard(); }) { DefaultItem = true };
-            miPause = new MenuItem(L.MenuPause, delegate { set.Paused = !set.Paused; set.Save(); Sync(); });
+            miPause = new MenuItem(L.MenuPause, delegate { pause.SetManual(!set.Paused); });
+            int[] pauseMinutes = { 15, 30, 60 };
+            for (int i = 0; i < pauseMinutes.Length; i++)
+            {
+                int minutes = pauseMinutes[i];
+                miPauseTimes[i] = new MenuItem(L.PauseMinutes(minutes), delegate { pause.Start(minutes); });
+            }
+            miPauseFor = new MenuItem(L.MenuTimedPause, miPauseTimes);
+            miResume = new MenuItem(L.MenuResume, delegate { pause.SetManual(false); });
             miSound = new MenuItem(L.MenuSound, delegate { set.Sound = !set.Sound; set.Save(); Sync(); if (set.Sound) sounds.Ok(); });
             miStopSounds = new MenuItem(L.MenuStopSounds, delegate { sounds.StopAll(); }) { Enabled = false };
             miHint = new MenuItem(L.MenuHint, delegate { set.FailHint = !set.FailHint; set.Save(); Sync(); });
@@ -102,7 +115,7 @@ namespace Cccc
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miCaps, miSource, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miPause, miPauseFor, miResume, miSound, miStopSounds, miHint, miCaps, miSource, miStartup, miAutoUpdate, miLang,
                 new MenuItem("-"), miCustomize, miUpdate,
                 new MenuItem("-"), miQuit,
             });
@@ -111,6 +124,8 @@ namespace Cccc
             SystemEvents.UserPreferenceChanged += (o, e) => { if (e.Category == UserPreferenceCategory.General) Sync(); };
 
             if (Settings.AutoStart) Settings.AutoStart = true;
+            pause.Changed += PauseChanged;
+            pauseTimer.Tick += delegate { pause.Check(); };
             Sync();
             tray.Visible = true;
             hook.Start();
@@ -139,6 +154,20 @@ namespace Cccc
             Sync();
         }
 
+        void PauseChanged()
+        {
+            if (set.Paused)
+            {
+                failCheck.Stop();
+                debounce.Stop();
+                keyKind = 0;
+                card.Dismiss();
+                capsCard.Dismiss();
+                sounds.StopAll();
+            }
+            Sync();
+        }
+
         void Changed()
         {
             set.Save();
@@ -150,7 +179,7 @@ namespace Cccc
         {
             if (customize == null)
             {
-                customize = new Customize(set, Changed, ShowSample, ShowCapsSample, TestSound);
+                customize = new Customize(set, Changed, ShowSample, ShowCapsSample, TestSound, pause.SetManual);
                 customize.Closed += delegate { customize = null; };
             }
             customize.Show();
@@ -192,6 +221,12 @@ namespace Cccc
             capsCard.Apply(set);
             miShow.Text = L.MenuShow;
             miPause.Text = L.MenuPause;
+            miPauseFor.Text = L.MenuTimedPause;
+            miResume.Text = L.MenuResume;
+            miResume.Enabled = set.Paused;
+            int[] minutes = { 15, 30, 60 };
+            for (int i = 0; i < minutes.Length; i++) miPauseTimes[i].Text = L.PauseMinutes(minutes[i]);
+            pauseTimer.Enabled = pause.Until.HasValue;
             miSound.Text = L.MenuSound;
             miStopSounds.Text = L.MenuStopSounds;
             miHint.Text = L.MenuHint;
@@ -236,7 +271,7 @@ namespace Cccc
             int size = SystemInformation.SmallIconSize.Width;
             using (var bmp = Icons.Tray(size, Theme.TaskbarLight(), set.Paused)) trayHandle = bmp.GetHicon();
             tray.Icon = Icon.FromHandle(trayHandle);
-            tray.Text = set.Paused ? L.TipPaused : L.Tip;
+            tray.Text = pause.Until.HasValue ? L.TipPausedUntil(pause.Until.Value.ToLocalTime()) : set.Paused ? L.TipPaused : L.Tip;
             if (old != IntPtr.Zero) Native.DestroyIcon(old);
         }
 
@@ -300,7 +335,7 @@ namespace Cccc
 
         void OnFailCheck()
         {
-            if (Native.GetClipboardSequenceNumber() != keySeq || Native.UserBusy()) return;
+            if (set.Paused || Native.GetClipboardSequenceNumber() != keySeq || Native.UserBusy()) return;
             if (set.Ignores(Sources.ForegroundExe())) return;
             double now = card.Now;
             bool repeat = now - lastFail < 6;
@@ -424,6 +459,7 @@ namespace Cccc
 
         void Quit()
         {
+            pauseTimer.Stop();
             hook.Stop();
             sounds.StopAll();
             tray.Visible = false;

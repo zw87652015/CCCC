@@ -365,6 +365,12 @@ final class Card {
         panel.alphaValue = CGFloat(Ease.outCubic(min(1, vis * 1.5))) * CGFloat(100 - Prefs.transparency) / 100
     }
 
+    func dismiss() {
+        visTarget = 0
+        vis = 0
+        hideNow()
+    }
+
     private func hideNow() {
         timer?.invalidate()
         timer = nil

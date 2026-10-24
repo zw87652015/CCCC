@@ -21,6 +21,7 @@ namespace Cccc
         public int FreeX = 500, FreeY = 900, Transparency;
         public int CapsPosition = -1, CapsFreeX = 500, CapsFreeY = 900, CapsWidth = 200, CapsHeight = 40, CapsDurationMs = 2600;
         public string Lang = "auto";
+        public string PauseUntilUtc;
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
         public List<string> IgnoreApps = new List<string>();
@@ -40,6 +41,8 @@ namespace Cccc
             {
                 if (k == null) return s;
                 s.Paused = Flag(k, "Paused", s.Paused);
+                object until = k.GetValue("PauseUntilUtc");
+                s.PauseUntilUtc = until == null ? null : until as string ?? "invalid";
                 s.Sound = Flag(k, "Sound", s.Sound);
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
                 s.CapsHint = Flag(k, "CapsHint", s.CapsHint);
@@ -93,6 +96,7 @@ namespace Cccc
             using (var k = Registry.CurrentUser.CreateSubKey(Key))
             {
                 k.SetValue("Paused", Paused ? 1 : 0, RegistryValueKind.DWord);
+                SetStr(k, "PauseUntilUtc", PauseUntilUtc);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("CapsHint", CapsHint ? 1 : 0, RegistryValueKind.DWord);
@@ -133,6 +137,13 @@ namespace Cccc
                 if (IgnoreApps.Count == 0) k.DeleteValue("IgnoreApps", false);
                 else k.SetValue("IgnoreApps", IgnoreApps.ToArray(), RegistryValueKind.MultiString);
             }
+        }
+
+        public Settings Clone()
+        {
+            var clone = (Settings)MemberwiseClone();
+            clone.IgnoreApps = new List<string>(IgnoreApps);
+            return clone;
         }
 
         public void ResetDisplay()

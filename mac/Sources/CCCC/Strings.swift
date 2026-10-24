@@ -175,4 +175,17 @@ enum L {
 
     static var tip: String { t("CCCC · copy with confidence", "CCCC · 放心复制") }
     static var tipPaused: String { t("CCCC · paused", "CCCC · 已暂停") }
+    static func pauseFor(_ minutes: Int) -> String { t("Pause for \(minutes) minutes", "暂停 \(minutes) 分钟") }
+    static var resumeNow: String { t("Resume now", "立即恢复") }
+    static func resumeAt(_ time: String) -> String { t("CCCC · paused until \(time)", "CCCC · 暂停至 \(time)") }
+    static var exportSettings: String { t("Export settings…", "导出配置…") }
+    static var importSettings: String { t("Import settings…", "导入配置…") }
+    static var importConfirm: String { t("Replace appearance, reminders, sounds, language, updates and ignored apps? A backup will be saved before importing. Pause, startup and system permissions stay unchanged.", "将替换外观、提醒、声音、语言、更新和忽略应用设置。导入前会自动备份。暂停、自启动和系统授权保持不变。") }
+    static var settingsImported: String { t("Settings imported", "配置已导入") }
+    static var settingsBackup: String { t("Previous settings backup: ", "导入前配置备份：") }
+    static var settingsExported: String { t("Settings exported", "配置已导出") }
+    static var settingsError: String { t("Settings operation failed", "配置操作失败") }
+    static var resourceFallback: String { t("Unavailable resources restored to built-in defaults: ", "以下资源不可用，已恢复内置默认值：") }
+    static var confirmImport: String { t("Import", "导入") }
+    static var cancelImport: String { t("Cancel", "取消") }
 }
