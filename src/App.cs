@@ -222,17 +222,17 @@ namespace Cccc
             {
                 c.Title = L.WifiSwitched(ch.Name);
                 c.Sub = ch.Name == null ? L.WifiNeedLocation
-                    : L.Detail(ch.Prev != null ? L.WifiFrom(ch.Prev) : null, L.Band(ch.Band), sig);
+                    : L.Detail(L.Band(ch.Band), sig, ch.Prev != null ? L.WifiFrom(ch.Prev) : null);
             }
             else if (ch.Kind == WifiWatch.BandChanged)
             {
                 c.Title = L.WifiNowBand(ch.Name, ch.Band);
-                c.Sub = ch.Name == null ? L.WifiNeedLocation : L.Detail(L.WifiWasBand(ch.PrevBand), sig);
+                c.Sub = ch.Name == null ? L.WifiNeedLocation : L.Detail(sig, L.WifiWasBand(ch.PrevBand));
             }
             else if (ch.Kind == WifiWatch.Reconnected)
             {
                 c.Title = L.WifiReconnected(ch.Name);
-                c.Sub = ch.Name == null ? L.WifiNeedLocation : L.Detail(L.WifiOffline(ch.Seconds), L.Band(ch.Band), sig);
+                c.Sub = ch.Name == null ? L.WifiNeedLocation : L.Detail(L.Band(ch.Band), sig, L.WifiOffline(ch.Seconds));
             }
             else
             {

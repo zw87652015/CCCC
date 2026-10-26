@@ -101,9 +101,9 @@ enum Sheet {
             (sourced(Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text),
                      "Visual Studio Code · github.com · Pull request #1234: Add customizable source display", line: true), false, 1.2),
             (sourced(Content(kind: .fail, title: L.nothingCopied, sub: L.stillHolding + text), "Microsoft Word"), false, 1.2),
-            (Content(kind: .wifiUp, title: L.wifiSwitched("CoffeeShop"), sub: L.detail(L.wifiFrom("HomeNet"), L.band(5), L.signal(82))), false, 1.2),
-            (Content(kind: .wifiUp, title: L.wifiNowBand("HomeNet", 5), sub: L.detail(L.wifiWasBand(2), L.signal(74))), false, 1.2),
-            (Content(kind: .wifiUp, title: L.wifiReconnected("HomeNet"), sub: L.detail(L.wifiOffline(6), L.band(2), L.signal(91))), false, 1.2),
+            (Content(kind: .wifiUp, title: L.wifiSwitched("CoffeeShop"), sub: L.detail(L.band(5), L.signal(82), L.wifiFrom("HomeNet"))), false, 1.2),
+            (Content(kind: .wifiUp, title: L.wifiNowBand("HomeNet", 5), sub: L.detail(L.signal(74), L.wifiWasBand(2))), false, 1.2),
+            (Content(kind: .wifiUp, title: L.wifiReconnected("HomeNet"), sub: L.detail(L.band(2), L.signal(91), L.wifiOffline(6))), false, 1.2),
             (Content(kind: .wifiDown, title: L.wifiDisconnected, sub: L.wifiWasOn("CoffeeShop")), false, 1.2),
         ]
     }

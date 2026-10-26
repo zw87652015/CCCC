@@ -446,13 +446,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch ch.kind {
         case .switched:
             c.title = L.wifiSwitched(ch.name)
-            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(ch.prev.map { L.wifiFrom($0) }, L.band(ch.band), sig)
+            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(L.band(ch.band), sig, ch.prev.map { L.wifiFrom($0) })
         case .bandChanged:
             c.title = L.wifiNowBand(ch.name, ch.band)
-            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(L.wifiWasBand(ch.prevBand), sig)
+            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(sig, L.wifiWasBand(ch.prevBand))
         case .reconnected:
             c.title = L.wifiReconnected(ch.name)
-            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(L.wifiOffline(ch.seconds), L.band(ch.band), sig)
+            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(L.band(ch.band), sig, L.wifiOffline(ch.seconds))
         case .disconnected:
             c.title = L.wifiDisconnected
             c.sub = ch.prev.map { L.wifiWasOn($0) } ?? (ch.name == nil ? L.wifiNeedLocation : "")
