@@ -53,6 +53,8 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private let onChange: () -> Void
     private let onShowSample: (Bool) -> Void
     private let onShowCaps: () -> Void
+    private let onShowWifi: () -> Void
+    private let wifi: WifiWatch
     private let onTest: (Bool) -> Void
     private let onClose: () -> Void
     private var acts: [Act] = []
@@ -62,6 +64,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
 
     private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
     private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!, chkCapsStay: NSButton!
+    private var chkWifi: NSButton!, chkWifiStay: NSButton!, sldWifiDuration: NSSlider!, lblWifiDuration: NSTextField!, lblWifiNames: NSTextField!
     private var popLang: NSPopUpButton!, popTheme: NSPopUpButton!, popPalette: NSPopUpButton!, popFont: NSPopUpButton!
     private var popIgnore: NSPopUpButton!
     private var ignoreList: NSStackView!
@@ -77,10 +80,12 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private var tabsView: NSTabView!
 
     init(onChange: @escaping () -> Void, onShowSample: @escaping (Bool) -> Void, onShowCaps: @escaping () -> Void,
-         onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void) {
+         onShowWifi: @escaping () -> Void, wifi: WifiWatch, onTest: @escaping (Bool) -> Void, onClose: @escaping () -> Void) {
         self.onChange = onChange
         self.onShowSample = onShowSample
         self.onShowCaps = onShowCaps
+        self.onShowWifi = onShowWifi
+        self.wifi = wifi
         self.onTest = onTest
         self.onClose = onClose
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
@@ -137,14 +142,19 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         "\(Prefs.capsWidth)|\(Prefs.capsHeight)|\(Prefs.capsPosition)|\(Prefs.capsDurationMs)|\(Prefs.capsStayUntilClicked)"
     }
 
+    private static func sigWifi() -> String {
+        "\(Prefs.wifiHint)|\(Prefs.wifiDurationMs)|\(Prefs.wifiStayUntilClicked)"
+    }
+
     // Every user change: apply through `changed`, re-sync the window, then pop the real card on screen.
     private func edit(_ f: () -> Void) {
         guard !loading else { return }
-        let shared = Customize.sigShared(), failed = Customize.sigFailed(), caps = Customize.sigCaps()
+        let shared = Customize.sigShared(), failed = Customize.sigFailed(), caps = Customize.sigCaps(), wifi = Customize.sigWifi()
         f()
         changed()
         if Customize.sigShared() != shared { onShowSample(false) }
         else if Customize.sigCaps() != caps { onShowCaps() }
+        else if Customize.sigWifi() != wifi, Prefs.wifiHint { onShowWifi() }
         else if Customize.sigFailed() != failed, Prefs.failHint { onShowSample(true) }
     }
 
@@ -227,6 +237,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         tabs.addTabViewItem(tab(L.tabSound, soundPage()))
         tabs.addTabViewItem(tab(L.tabSource, sourcePage()))
         tabs.addTabViewItem(tab(L.tabCaps, capsPage()))
+        tabs.addTabViewItem(tab(L.tabWifi, wifiPage()))
         tabs.addTabViewItem(tab(L.tabAbout, aboutPage()))
         tabsView = tabs
 
@@ -562,6 +573,18 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
                      row(L.capsWidth, [sldCapsW, lblCapsW]), row(L.capsHeight, [sldCapsH, lblCapsH]), box])
     }
 
+    private func wifiPage() -> NSView {
+        chkWifi = check(L.menuWifi) { c in Prefs.wifiHint = Customize.isOn(c) }
+        chkWifiStay = check(L.stayUntilClicked) { c in Prefs.wifiStayUntilClicked = Customize.isOn(c) }
+        sldWifiDuration = slider(5, 100) { c in Prefs.wifiDurationMs = Int(round((c as! NSSlider).doubleValue)) * 100 }
+        lblWifiDuration = NSTextField(labelWithString: "")
+        lblWifiNames = NSTextField(labelWithString: "")
+        lblWifiNames.textColor = .secondaryLabelColor
+        let link = aboutLink(L.wifiOpenLocation, "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
+        return page([chkWifi, row(L.durationTitle, [sldWifiDuration, lblWifiDuration]), chkWifiStay,
+                     row(L.wifiNames, [lblWifiNames, link])])
+    }
+
     private func aboutPage() -> NSView {
         let info = Bundle.main
         let commit = info.object(forInfoDictionaryKey: "CCCCBuildCommit") as? String ?? "unknown"
@@ -621,6 +644,12 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         sldCapsDuration.doubleValue = Double(Prefs.capsDurationMs) / 100
         sldCapsDuration.isEnabled = !Prefs.capsStayUntilClicked
         chkCapsStay.state = Prefs.capsStayUntilClicked ? .on : .off
+        chkWifi.state = Prefs.wifiHint ? .on : .off
+        sldWifiDuration.doubleValue = Double(Prefs.wifiDurationMs) / 100
+        sldWifiDuration.isEnabled = !Prefs.wifiStayUntilClicked
+        chkWifiStay.state = Prefs.wifiStayUntilClicked ? .on : .off
+        lblWifiNames.stringValue = !wifi.available ? L.wifiNoAdapter
+            : (wifi.namesAllowed.map { $0 ? L.wifiAllowed : L.wifiNotAllowed } ?? "")
         sldCapsW.doubleValue = Double(Prefs.capsWidth)
         sldCapsH.doubleValue = Double(Prefs.capsHeight)
         let capsPos = Prefs.capsPosition < 0 ? Prefs.position : Prefs.capsPosition
@@ -666,6 +695,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         lblCapsDuration.stringValue = String(format: "%.1f s", Double(Prefs.capsDurationMs) / 1000)
         lblCapsW.stringValue = "\(Prefs.capsWidth) px"
         lblCapsH.stringValue = "\(Prefs.capsHeight) px"
+        lblWifiDuration.stringValue = String(format: "%.1f s", Double(Prefs.wifiDurationMs) / 1000)
     }
 
     private func resetAll() {
@@ -681,7 +711,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     // MARK: Screenshot verb
 
     static func shot(_ dir: String) {
-        let c = Customize(onChange: {}, onShowSample: { _ in }, onShowCaps: {}, onTest: { _ in }, onClose: {})
+        let c = Customize(onChange: {}, onShowSample: { _ in }, onShowCaps: {}, onShowWifi: {}, wifi: WifiWatch(), onTest: { _ in }, onClose: {})
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let win = c.window
         let sizes: [(String, NSSize)] = [

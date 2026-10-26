@@ -12,7 +12,8 @@ namespace Cccc
         {
             const float s = 1.5f;
             var card = new Card();
-            var capsCard = new Card(true);
+            var capsCard = new Card(Role.Caps);
+            var wifiCard = new Card(Role.Wifi);
             int cw = (int)Math.Ceiling(card.CanvasW * s), ch = (int)Math.Ceiling(card.CanvasH * s);
             var rows = Rows();
             int iconRow = 120;
@@ -32,10 +33,12 @@ namespace Cccc
                 {
                     card.Layout(s, themes[col]);
                     capsCard.Layout(s, themes[col]);
+                    wifiCard.Layout(s, themes[col]);
                     for (int row = 0; row < rows.Length; row++)
                     {
                         var r = rows[row];
-                        var which = r.Item1.Kind == Kind.Caps ? capsCard : card;
+                        var which = r.Item1.Kind == Kind.Caps ? capsCard
+                            : r.Item1.Kind == Kind.WifiUp || r.Item1.Kind == Kind.WifiDown ? wifiCard : card;
                         int px = col * cw, py = row * ch + ch - (int)Math.Ceiling(which.CanvasH * s);
                         if (themes[col].Glass) which.Backdrop(wall, sheet.Width, px, py);
                         which.Still(r.Item1, r.Item2, r.Item3);
@@ -110,6 +113,10 @@ namespace Cccc
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Link, Sub = "github.com/microsoft/terminal/issues/1234", SrcIcon = appIcon }, false, 1.2),
                 Row(new Content { Kind = Kind.Copied, Title = L.Again[0], Meta = L.Chars(text.Length), Sub = text, SrcIcon = appIcon, SrcText = "Visual Studio Code · github.com · Pull request #1234: Add customizable source display", SrcLine = true }, false, 1.2),
                 Row(new Content { Kind = Kind.Fail, Title = L.NothingCopied, Sub = L.StillHolding + text, SrcIcon = appIcon, SrcText = "Microsoft Word" }, false, 1.2),
+                Row(new Content { Kind = Kind.WifiUp, Title = L.WifiSwitched("CoffeeShop"), Sub = L.Detail(L.WifiFrom("HomeNet"), L.Band(5), L.Signal(82)) }, false, 1.2),
+                Row(new Content { Kind = Kind.WifiUp, Title = L.WifiNowBand("HomeNet", 5), Sub = L.Detail(L.WifiWasBand(2), L.Signal(74)) }, false, 1.2),
+                Row(new Content { Kind = Kind.WifiUp, Title = L.WifiReconnected("HomeNet"), Sub = L.Detail(L.WifiOffline(6), L.Band(2), L.Signal(91)) }, false, 1.2),
+                Row(new Content { Kind = Kind.WifiDown, Title = L.WifiDisconnected, Sub = L.WifiWasOn("CoffeeShop") }, false, 1.2),
             };
         }
 

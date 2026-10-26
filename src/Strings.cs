@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text;
 
 namespace Cccc
 {
@@ -61,6 +62,36 @@ namespace Cccc
         public static string HintCapsWidth { get { return T("How wide the Caps Lock card is", "大写锁定卡片的宽度"); } }
         public static string CapsHeight { get { return T("Card height", "卡片高度"); } }
         public static string HintCapsHeight { get { return T("How tall the Caps Lock card is", "大写锁定卡片的高度"); } }
+
+        // Wi-Fi card. Details are joined with " · " and each shows only when known.
+        public static string WifiSwitched(string name) { return name == null ? T("Wi-Fi switched", "Wi-Fi 已切换") : T("Switched to " + name, "已切换到 " + name); }
+        public static string WifiFrom(string old) { return T("From " + old, "原为 " + old); }
+        public static string WifiNowBand(string name, int band) { return name == null ? T("Wi-Fi now " + Band(band), "Wi-Fi 现在是 " + Band(band)) : T(name + ": now " + Band(band), name + "：已切换到 " + Band(band)); }
+        public static string WifiWasBand(int band) { return T("Was " + Band(band), "原为 " + Band(band)); }
+        public static string WifiReconnected(string name) { return name == null ? T("Wi-Fi reconnected", "Wi-Fi 已重新连接") : T("Reconnected to " + name, "已重新连接 " + name); }
+        public static string WifiOffline(int sec) { return T("Offline for " + sec + " s", "断开了 " + sec + " 秒"); }
+        public static string WifiDisconnected { get { return T("Wi-Fi disconnected", "Wi-Fi 已断开"); } }
+        public static string WifiWasOn(string name) { return T("Was on " + name, "之前连接的是 " + name); }
+        public static string WifiNeedLocation { get { return T("Allow Location to see network names", "允许定位权限以显示网络名称"); } }
+        public static string Band(int band) { return band == 2 ? "2.4 GHz" : band == 5 ? "5 GHz" : band == 6 ? "6 GHz" : null; }
+        public static string Signal(int pct) { return T("Signal " + pct + "%", "信号 " + pct + "%"); }
+        public static string WifiConnected(string name) { return name == null ? T("Wi-Fi connected", "Wi-Fi 已连接") : T("Connected to " + name, "已连接 " + name); }
+        public static string Detail(params string[] parts)
+        {
+            var sb = new StringBuilder();
+            foreach (string p in parts)
+                if (!string.IsNullOrEmpty(p)) { if (sb.Length > 0) sb.Append(" · "); sb.Append(p); }
+            return sb.ToString();
+        }
+        public static string MenuWifi { get { return T("Show Wi-Fi changes", "Wi-Fi 变化时提醒我"); } }
+        public static string HintWifi { get { return T("Show a card next to the Wi-Fi icon when the network changes", "网络变化时在 Wi-Fi 图标旁弹出卡片"); } }
+        public static string TabWifi { get { return "Wi-Fi"; } }
+        public static string WifiNames { get { return T("Network names", "网络名称"); } }
+        public static string HintWifiNames { get { return T("Windows asks for Location to show them", "Windows 需要定位权限才能显示名称"); } }
+        public static string WifiAllowed { get { return T("Allowed", "已允许"); } }
+        public static string WifiNotAllowed { get { return T("Not allowed", "未允许"); } }
+        public static string WifiNoAdapter { get { return T("No Wi-Fi adapter", "没有 Wi-Fi 适配器"); } }
+        public static string WifiOpenLocation { get { return T("Open Location settings", "打开定位设置"); } }
 
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }

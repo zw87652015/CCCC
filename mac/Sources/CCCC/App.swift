@@ -55,11 +55,13 @@ private let keyTapCallback: CGEventTapCallBack = { _, type, event, refcon in
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updated: Bool
     private let card = Card()
-    private let capsCard = Card(caps: true)
+    private let capsCard = Card(role: .caps)
+    private let wifiCard = Card(role: .wifi)
+    private let wifi = WifiWatch()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private let trayIcon = Icons.trayTemplate()
-    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miStopSounds: NSMenuItem!, miHint: NSMenuItem!, miCaps: NSMenuItem!
+    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miStopSounds: NSMenuItem!, miHint: NSMenuItem!, miCaps: NSMenuItem!, miWifi: NSMenuItem!
     private var miSource: NSMenuItem!, miSourceOn: NSMenuItem!, miWhen: NSMenuItem!, miWhenAlways: NSMenuItem!
     private var miWhenAuto: NSMenuItem!, miDetail: NSMenuItem!, miDetails: [NSMenuItem] = []
     private var miInput: NSMenuItem!, miStartup: NSMenuItem!, miAutoUpdate: NSMenuItem!
@@ -107,10 +109,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.target = self
         statusItem.button?.action = #selector(statusClicked)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        wifi.changed = { [weak self] ch in self?.onWifi(ch) }
+        wifi.onNamesAllowed = { [weak self] in self?.customize?.reload() }
         sync()
 
         DistributedNotificationCenter.default().addObserver(forName: NSNotification.Name(helloNotification), object: nil, queue: .main) { [weak self] _ in
             self?.notice(L.runningTitle, L.runningSub)
+        }
+
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.wifi.suspend()
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.wifi.resume()
         }
 
         if !Prefs.askedInputMonitoring {
@@ -164,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miStopSounds.isEnabled = false
         miHint = item(#selector(toggleHint))
         miCaps = item(#selector(toggleCaps))
+        miWifi = item(#selector(toggleWifi))
         miSourceOn = item(#selector(toggleSource))
         miWhen = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         miWhen.isEnabled = false
@@ -202,7 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miUpdate = item(#selector(checkUpdateAction))
         miQuit = item(#selector(quitAction))
 
-        for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miCaps, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
+        for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
             menu.addItem(entry ?? .separator())
         }
         menu.delegate = self
@@ -223,6 +235,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         L.apply(Prefs.lang == "auto" ? nil : Prefs.lang)
         card.apply()
         capsCard.apply()
+        wifiCard.apply()
+        if Prefs.wifiHint { wifi.start() } else { wifi.stop() }
         customize?.reload()
         miShow.title = L.menuShow
         miPause.title = L.menuPause
@@ -230,6 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miStopSounds.title = L.menuStopSounds
         miHint.title = L.menuHint
         miCaps.title = L.menuCaps
+        miWifi.title = L.menuWifi
         miSource.title = L.menuSource
         miSourceOn.title = L.menuSourceOn
         miWhen.title = L.sourceWhen
@@ -249,6 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miSound.state = Prefs.sound ? .on : .off
         miHint.state = Prefs.failHint ? .on : .off
         miCaps.state = Prefs.capsHint ? .on : .off
+        miWifi.state = Prefs.wifiHint ? .on : .off
         miSourceOn.state = Prefs.showSource ? .on : .off
         miWhenAlways.state = Prefs.sourceWhen == 0 ? .on : .off
         miWhenAuto.state = Prefs.sourceWhen == 1 ? .on : .off
@@ -303,6 +319,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleCaps() {
         Prefs.capsHint.toggle()
+        sync()
+    }
+
+    @objc private func toggleWifi() {
+        Prefs.wifiHint.toggle()
         sync()
     }
 
@@ -363,6 +384,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 },
                 onShowSample: { [weak self] failed in self?.showSample(failed: failed) },
                 onShowCaps: { [weak self] in self?.showCapsSample() },
+                onShowWifi: { [weak self] in self?.showWifiSample() },
+                wifi: wifi,
                 onTest: { [weak self] ok in
                     if ok { self?.sounds.playOk() } else { self?.sounds.playNo() }
                 },
@@ -395,10 +418,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         capsCard.show(c, repeat: false)
     }
 
+    // The preview shows the real current connection, not fake data.
+    private func showWifiSample() {
+        guard let snap = wifi.current() else {
+            if !wifi.available {
+                wifiCard.show(Content(kind: .wifiDown, title: L.wifiNoAdapter), repeat: false)
+            }
+            return
+        }
+        let ch = snap.change
+        let c: Content
+        if !snap.connected {
+            c = Content(kind: .wifiDown, title: L.wifiDisconnected)
+        } else if ch.name != nil {
+            c = Content(kind: .wifiUp, title: L.wifiConnected(ch.name),
+                        sub: L.detail(L.band(ch.band), ch.signal >= 0 ? L.signal(ch.signal) : nil))
+        } else {
+            c = Content(kind: .wifiUp, title: L.wifiConnected(nil), sub: L.wifiNeedLocation)
+        }
+        present(c, repeat: false)
+    }
+
+    private func onWifi(_ ch: WifiWatch.Change) {
+        guard Prefs.wifiHint, !Prefs.paused, !userBusy() else { return }
+        let sig = ch.signal >= 0 ? L.signal(ch.signal) : nil
+        let c = Content(kind: ch.kind == .disconnected ? .wifiDown : .wifiUp)
+        switch ch.kind {
+        case .switched:
+            c.title = L.wifiSwitched(ch.name)
+            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(ch.prev.map { L.wifiFrom($0) }, L.band(ch.band), sig)
+        case .bandChanged:
+            c.title = L.wifiNowBand(ch.name, ch.band)
+            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(L.wifiWasBand(ch.prevBand), sig)
+        case .reconnected:
+            c.title = L.wifiReconnected(ch.name)
+            c.sub = ch.name == nil ? L.wifiNeedLocation : L.detail(L.wifiOffline(ch.seconds), L.band(ch.band), sig)
+        case .disconnected:
+            c.title = L.wifiDisconnected
+            c.sub = ch.prev.map { L.wifiWasOn($0) } ?? (ch.name == nil ? L.wifiNeedLocation : "")
+        }
+        present(c, repeat: false)
+    }
+
     @objc private func checkUpdateAction() { checkUpdate(manual: true) }
 
     @objc private func stopSoundsAction() { sounds.stopAll() }
-    @objc private func quitAction() { sounds.stopAll(); NSApp.terminate(nil) }
+    @objc private func quitAction() { sounds.stopAll(); wifi.stop(); NSApp.terminate(nil) }
 
     // MARK: Keyboard (listen-only event tap; records only that a copy/cut chord happened, plus Caps Lock state)
 
@@ -595,7 +660,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func present(_ c: Content, repeat rep: Bool) {
         dbg("card: kind=\(c.kind) title=\"\(c.title)\" meta=\"\(c.meta)\" sub=\"\(c.sub)\" count=\(c.count) repeat=\(rep)")
-        (c.kind == .caps ? capsCard : card).show(c, repeat: rep)
+        (c.kind == .caps ? capsCard : c.kind == .wifiUp || c.kind == .wifiDown ? wifiCard : card).show(c, repeat: rep)
     }
 
     // MARK: Updates

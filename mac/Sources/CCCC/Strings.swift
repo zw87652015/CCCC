@@ -64,6 +64,35 @@ enum L {
     static var capsHeight: String { t("Card height", "卡片高度") }
     static var hintCapsHeight: String { t("How tall the Caps Lock card is", "大写锁定卡片的高度") }
 
+    // Wi-Fi card. Details are joined with " · " and each shows only when known.
+    static func wifiSwitched(_ name: String?) -> String { name.map { t("Switched to " + $0, "已切换到 " + $0) } ?? t("Wi-Fi switched", "Wi-Fi 已切换") }
+    static func wifiFrom(_ old: String) -> String { t("From " + old, "原为 " + old) }
+    static func wifiNowBand(_ name: String?, _ b: Int) -> String {
+        let g = band(b) ?? ""
+        return name.map { t($0 + ": now " + g, $0 + "：已切换到 " + g) } ?? t("Wi-Fi now " + g, "Wi-Fi 现在是 " + g)
+    }
+    static func wifiWasBand(_ b: Int) -> String { t("Was " + (band(b) ?? ""), "原为 " + (band(b) ?? "")) }
+    static func wifiReconnected(_ name: String?) -> String { name.map { t("Reconnected to " + $0, "已重新连接 " + $0) } ?? t("Wi-Fi reconnected", "Wi-Fi 已重新连接") }
+    static func wifiOffline(_ sec: Int) -> String { t("Offline for \(sec) s", "断开了 \(sec) 秒") }
+    static var wifiDisconnected: String { t("Wi-Fi disconnected", "Wi-Fi 已断开") }
+    static func wifiWasOn(_ name: String) -> String { t("Was on " + name, "之前连接的是 " + name) }
+    static var wifiNeedLocation: String { t("Allow Location to see network names", "允许定位权限以显示网络名称") }
+    static func band(_ b: Int) -> String? { b == 2 ? "2.4 GHz" : b == 5 ? "5 GHz" : b == 6 ? "6 GHz" : nil }
+    static func signal(_ pct: Int) -> String { t("Signal \(pct)%", "信号 \(pct)%") }
+    static func wifiConnected(_ name: String?) -> String { name.map { t("Connected to " + $0, "已连接 " + $0) } ?? t("Wi-Fi connected", "Wi-Fi 已连接") }
+    static func detail(_ parts: String?...) -> String {
+        parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+    static var menuWifi: String { t("Show Wi-Fi changes", "Wi-Fi 变化时提醒我") }
+    static var hintWifi: String { t("Show a card under Control Center when the network changes", "网络变化时在控制中心下方弹出卡片") }
+    static var tabWifi: String { "Wi-Fi" }
+    static var wifiNames: String { t("Network names", "网络名称") }
+    static var hintWifiNames: String { t("macOS asks for Location to show them", "macOS 需要定位权限才能显示名称") }
+    static var wifiAllowed: String { t("Allowed", "已允许") }
+    static var wifiNotAllowed: String { t("Not allowed", "未允许") }
+    static var wifiNoAdapter: String { t("No Wi-Fi adapter", "没有 Wi-Fi 适配器") }
+    static var wifiOpenLocation: String { t("Open Location settings", "打开定位设置") }
+
     static var menuShow: String { t("Show clipboard", "查看剪贴板") }
     static var menuPause: String { t("Pause", "暂停") }
     static var menuSound: String { t("Sound", "提示音") }

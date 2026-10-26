@@ -7,6 +7,8 @@
   - Debug log: run the bundle binary with `CCCC_DEBUG=1`.
   - Release (sign + notarize + staple, zip + dmg into `dist/`): `mac/release.sh` (uses the shared `ILM-notary` notarytool keychain profile; override with `NOTARY_PROFILE`).
   - `CCCC_ARCHS` (default `arm64 x86_64`) picks the architectures; `CCCC_SIGN_ID=-` forces ad-hoc signing.
+  - `mac/CCCC.entitlements` (Location, needed under hardened runtime for the Wi-Fi SSID) is applied by `build.sh`.
+- Windows design sheet: `bin\CCCC.exe --sheet out.png` (`CCCC_LANG=en|zh`).
 
 # Rules
 - Reply in precise and simple language. As simple as possible.

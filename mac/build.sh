@@ -43,6 +43,6 @@ ID="${ID:--}"
 TS=(--timestamp=none)
 if [[ "${CCCC_TIMESTAMP:-0}" == 1 ]]; then TS=(--timestamp); fi
 
-codesign --force --options runtime --sign "$ID" "${TS[@]}" "$APP"
+codesign --force --options runtime --entitlements "$MAC/CCCC.entitlements" --sign "$ID" "${TS[@]}" "$APP"
 codesign --verify --strict --verbose=2 "$APP"
 echo "$APP"

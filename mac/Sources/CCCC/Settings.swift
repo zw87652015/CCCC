@@ -96,6 +96,18 @@ enum Prefs {
         get { d.bool(forKey: "CapsStayUntilClicked") }
         set { d.set(newValue, forKey: "CapsStayUntilClicked") }
     }
+    static var wifiHint: Bool {
+        get { d.bool(forKey: "WifiHint") }
+        set { d.set(newValue, forKey: "WifiHint") }
+    }
+    static var wifiDurationMs: Int {
+        get { range("WifiDurationMs", 4000, 500, 10000) }
+        set { d.set(newValue, forKey: "WifiDurationMs") }
+    }
+    static var wifiStayUntilClicked: Bool {
+        get { d.bool(forKey: "WifiStayUntilClicked") }
+        set { d.set(newValue, forKey: "WifiStayUntilClicked") }
+    }
     static var position: Int {
         get { range("Position", 6, 0, 10) }
         set { d.set(newValue, forKey: "Position") }
@@ -157,6 +169,7 @@ enum Prefs {
         okColor = nil; warnColor = nil; bgColor = nil; borderColor = nil; titleColor = nil; subColor = nil; metaColor = nil
         durationMs = 1900; stayUntilClicked = false; position = 6; scale = 100; textScale = 100
         capsDurationMs = 2600; capsStayUntilClicked = false
+        wifiDurationMs = 4000; wifiStayUntilClicked = false
         transparency = 0; simple = false
         fontFamily = nil; soundOkFile = nil; soundFailFile = nil
         showSource = true; sourceWhen = 1; sourceDetail = 1

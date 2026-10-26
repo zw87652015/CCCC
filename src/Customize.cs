@@ -64,12 +64,13 @@ namespace Cccc
         readonly Settings set;
         readonly Action changed;
         readonly Action<bool> showSample, test;
-        readonly Action showCaps;
+        readonly Action showCaps, showWifi;
+        readonly WifiWatch wifiWatch;
         readonly Card card = new Card();
         readonly Window w;
         readonly DispatcherTimer armTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        readonly RadioButton[] navs = new RadioButton[7];
-        readonly StackPanel[] pages = new StackPanel[7];
+        readonly RadioButton[] navs = new RadioButton[8];
+        readonly StackPanel[] pages = new StackPanel[8];
         readonly TextBlock txtTitle;
         readonly Button btnReset;
         readonly StackPanel pageHost;
@@ -80,10 +81,10 @@ namespace Cccc
         readonly Button[] tiles = new Button[5];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay;
+        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay, chkWifi, chkWifiStay;
         Picker pickMain, pickCaps;
-        Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur;
-        TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur;
+        Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur, sldWifiDur;
+        TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur, lblWifiDur, lblWifiNames;
         ComboBox cmbFont, cmbIgnore;
         StackPanel ignoreList;
         Sound soundOk, soundFail;
@@ -99,12 +100,14 @@ namespace Cccc
         bool loading, armed, dark, builtZh, expanded, lastFull, popLoading, switching;
         int page;
 
-        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action<bool> onTest)
+        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action onShowWifi, Action<bool> onTest, WifiWatch wifiWatch)
         {
             set = settings;
             changed = onChanged;
             showSample = onShowSample;
             showCaps = onShowCaps;
+            showWifi = onShowWifi;
+            this.wifiWatch = wifiWatch;
             test = onTest;
 
             using (var s = typeof(Customize).Assembly.GetManifestResourceStream("Cccc.Customize.xaml"))
@@ -195,6 +198,14 @@ namespace Cccc
             sldCapsDur.IsEnabled = !set.CapsStayUntilClicked;
             lblCapsDur.Text = (set.CapsDurationMs / 1000.0).ToString("0.0") + " s";
             chkCapsStay.IsChecked = set.CapsStayUntilClicked;
+            chkWifi.IsChecked = set.WifiHint;
+            sldWifiDur.Value = set.WifiDurationMs;
+            sldWifiDur.IsEnabled = !set.WifiStayUntilClicked;
+            lblWifiDur.Text = (set.WifiDurationMs / 1000.0).ToString("0.0") + " s";
+            chkWifiStay.IsChecked = set.WifiStayUntilClicked;
+            lblWifiNames.Text = !wifiWatch.Available ? L.WifiNoAdapter
+                : wifiWatch.NamesAllowed == null ? ""
+                : wifiWatch.NamesAllowed == true ? L.WifiAllowed : L.WifiNotAllowed;
             lblSize.Text = set.Scale + "%";
             lblText.Text = set.TextScale + "%";
             lblTrans.Text = set.Transparency + "%";
@@ -245,16 +256,22 @@ namespace Cccc
                 + "|" + s.CapsDurationMs + "|" + s.CapsStayUntilClicked;
         }
 
+        static string SigWifi(Settings s)
+        {
+            return s.WifiHint + "|" + s.WifiDurationMs + "|" + s.WifiStayUntilClicked;
+        }
+
         // Every user change: apply once through `changed`, re-sync the window, then pop the real card on screen.
         void Edit(Action a)
         {
             if (loading) return;
-            string shared = SigShared(set), failed = SigFailed(set), caps = SigCaps(set);
+            string shared = SigShared(set), failed = SigFailed(set), caps = SigCaps(set), wifi = SigWifi(set);
             a();
             changed();
             Reload();
             if (SigShared(set) != shared) showSample(false);
             else if (SigCaps(set) != caps) showCaps();
+            else if (SigWifi(set) != wifi && set.WifiHint) showWifi();
             else if (SigFailed(set) != failed && set.FailHint) showSample(true);
         }
 
@@ -322,9 +339,9 @@ namespace Cccc
         {
             builtZh = L.Zh;
             w.Title = L.CustomizeTitle;
-            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabAbout };
-            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE765", "\uE946" };
-            for (int i = 0; i < 7; i++)
+            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAbout };
+            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE765", "\uE701", "\uE946" };
+            for (int i = 0; i < 8; i++)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
                 row.Children.Add(new TextBlock { Text = glyphs[i], Style = Res<Style>("Glyph"), Margin = new Thickness(0, 0, 12, 0) });
@@ -337,7 +354,7 @@ namespace Cccc
 
         string PageTitle(int index)
         {
-            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabAbout }[index];
+            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAbout }[index];
         }
 
         void ShowPage(int index)
@@ -356,8 +373,8 @@ namespace Cccc
 
         void BuildNav()
         {
-            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource", "navCaps", "navAbout" };
-            for (int i = 0; i < 7; i++)
+            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource", "navCaps", "navWifi", "navAbout" };
+            for (int i = 0; i < 8; i++)
             {
                 int index = i;
                 var nav = (RadioButton)w.FindName(names[i]);
@@ -493,7 +510,8 @@ namespace Cccc
             pages[3] = BuildSound();
             pages[4] = BuildSource();
             pages[5] = BuildCaps();
-            pages[6] = BuildAbout();
+            pages[6] = BuildWifi();
+            pages[7] = BuildAbout();
             foreach (StackPanel p in pages) pageHost.Children.Add(p);
         }
 
@@ -1134,6 +1152,28 @@ namespace Cccc
                 Box(pickCaps.Body));
         }
 
+        // MARK: Wi-Fi
+
+        StackPanel BuildWifi()
+        {
+            chkWifi = Toggle();
+            BindToggle(chkWifi, v => set.WifiHint = v);
+            sldWifiDur = Slide(500, 10000, 100, v => set.WifiDurationMs = v);
+            lblWifiDur = new TextBlock { Style = Res<Style>("ValueText"), Width = 60, Margin = new Thickness(10, 0, 0, 0) };
+            var durRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldWifiDur, lblWifiDur } };
+            chkWifiStay = Toggle();
+            BindToggle(chkWifiStay, v => set.WifiStayUntilClicked = v);
+            lblWifiNames = new TextBlock { Style = Res<Style>("ValueText"), VerticalAlignment = VerticalAlignment.Center };
+            var link = LinkTo(L.WifiOpenLocation, "ms-settings:privacy-location");
+            link.Margin = new Thickness(12, 0, 0, 0);
+            var namesRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { lblWifiNames, link } };
+            return PageOf(
+                SettingCard(L.MenuWifi, L.HintWifi, chkWifi),
+                SettingCard(L.DurationTitle, L.HintDuration, durRow),
+                SettingCard(L.StayUntilClicked, L.HintStay, chkWifiStay),
+                SettingCard(L.WifiNames, L.HintWifiNames, namesRow));
+        }
+
         // MARK: About
 
         StackPanel BuildAbout()
@@ -1327,6 +1367,10 @@ namespace Cccc
                 case "capsWidth": return sldCapsW;
                 case "capsDuration": return sldCapsDur;
                 case "capsStay": return chkCapsStay;
+                case "wifi": return chkWifi;
+                case "wifiDuration": return sldWifiDur;
+                case "wifiStay": return chkWifiStay;
+                case "wifiNames": return lblWifiNames;
                 case "capsHeight": return sldCapsH;
                 case "capsSame": return pickCaps.ChipSame;
             }

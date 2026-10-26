@@ -108,6 +108,126 @@ namespace Cccc
         public static bool KeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
         public static bool CapsLock() { return (GetKeyState(0x14) & 1) != 0; }
 
+        // Taskbar and tray lookups for the Wi-Fi card anchor.
+        public const uint ABM_GETTASKBARPOS = 5;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct APPBARDATA
+        {
+            public int cbSize;
+            public IntPtr hWnd;
+            public uint uCallbackMessage;
+            public uint uEdge;
+            public RECT rc;
+            public int lParam;
+        }
+
+        [DllImport("shell32.dll")] public static extern IntPtr SHAppBarMessage(uint msg, ref APPBARDATA data);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
+        [DllImport("user32.dll")] public static extern IntPtr MonitorFromRect(ref RECT r, uint flags);
+
+        // Native Wi-Fi (wlanapi). Notification sources: ACM = 8, MSM = 16.
+        public const int WLAN_ACM = 8, WLAN_MSM = 16;
+        public const int WLAN_OP_RADIO_STATE = 4, WLAN_OP_INTERFACE_STATE = 6, WLAN_OP_CURRENT_CONNECTION = 7, WLAN_OP_CHANNEL_NUMBER = 8;
+        public const int WLAN_ACM_CONNECTION_COMPLETE = 10, WLAN_ACM_DISCONNECTED = 21, WLAN_MSM_ROAMING_END = 6;
+
+        public delegate void WlanNotify(ref WLAN_NOTIFICATION_DATA data, IntPtr context);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct WLAN_NOTIFICATION_DATA
+        {
+            public int Source;
+            public int Code;
+            public Guid InterfaceGuid;
+            public int DataSize;
+            public IntPtr Data;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct DOT11_SSID { public uint Length; [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] Bytes; }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct WLAN_CONNECTION_NOTIFICATION_DATA
+        {
+            public int ConnectionMode;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string ProfileName;
+            public DOT11_SSID Ssid;
+            public int BssType;
+            public int SecurityEnabled;
+            public uint ReasonCode;
+            public uint Flags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 1)] public string ProfileXml;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct WLAN_ASSOCIATION_ATTRIBUTES
+        {
+            public DOT11_SSID Ssid;
+            public int BssType;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 6)] public byte[] Bssid;
+            public int PhyType;
+            public uint PhyIndex;
+            public uint SignalQuality;
+            public uint RxRate, TxRate;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct WLAN_SECURITY_ATTRIBUTES
+        {
+            public int SecurityEnabled, OneXEnabled;
+            public int AuthAlgorithm, CipherAlgorithm;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct WLAN_CONNECTION_ATTRIBUTES
+        {
+            public int State;
+            public int ConnectionMode;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string ProfileName;
+            public WLAN_ASSOCIATION_ATTRIBUTES Assoc;
+            public WLAN_SECURITY_ATTRIBUTES Security;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct WLAN_INTERFACE_INFO
+        {
+            public Guid Guid;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string Description;
+            public int State;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct WLAN_BSS_ENTRY
+        {
+            public DOT11_SSID Ssid;
+            public uint PhyId;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 6)] public byte[] Bssid;
+            public int BssType;
+            public int BssPhyType;
+            public int Rssi;
+            public uint LinkQuality;
+            public byte InRegDomain;
+            public ushort BeaconPeriod;
+            public ulong Timestamp;
+            public ulong HostTimestamp;
+            public ushort CapabilityInfo;
+            public uint ChCenterFrequency;
+            public uint RateSetLength;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 126)] public ushort[] RateSet;
+            public uint IeOffset;
+            public uint IeSize;
+        }
+
+        [DllImport("wlanapi.dll")] public static extern uint WlanOpenHandle(uint version, IntPtr reserved, out uint negotiated, out IntPtr handle);
+        [DllImport("wlanapi.dll")] public static extern uint WlanCloseHandle(IntPtr handle, IntPtr reserved);
+        [DllImport("wlanapi.dll")] public static extern void WlanFreeMemory(IntPtr mem);
+        [DllImport("wlanapi.dll")] public static extern uint WlanRegisterNotification(IntPtr handle, uint sources, bool ignoreDup, WlanNotify callback, IntPtr context, IntPtr reserved, out uint prevSources);
+        [DllImport("wlanapi.dll")] public static extern uint WlanEnumInterfaces(IntPtr handle, IntPtr reserved, out IntPtr list);
+        [DllImport("wlanapi.dll")] public static extern uint WlanQueryInterface(IntPtr handle, ref Guid guid, int opcode, IntPtr reserved, out uint size, out IntPtr data, out int type);
+        [DllImport("wlanapi.dll")] public static extern uint WlanGetNetworkBssList(IntPtr handle, ref Guid guid, IntPtr ssid, int bssType, bool security, IntPtr reserved, out IntPtr list);
+
         public static string ClassOf(IntPtr hwnd)
         {
             var sb = new StringBuilder(128);

@@ -5,7 +5,8 @@ enum Sheet {
     static func render(_ path: String) {
         L.apply(nil)
         let card = Card(defaults: true)
-        let capsCard = Card(defaults: true, caps: true)
+        let capsCard = Card(defaults: true, role: .caps)
+        let wifiCard = Card(defaults: true, role: .wifi)
         let cw = card.canvasW, ch = card.canvasH
         let rows = rowSpecs()
         let iconRow: CGFloat = 80
@@ -27,8 +28,9 @@ enum Sheet {
         for (col, theme) in [Theme.darkTheme, Theme.lightTheme].enumerated() {
             card.th = theme
             capsCard.th = theme
+            wifiCard.th = theme
             for (row, spec) in rows.enumerated() {
-                let target = spec.0.kind == .caps ? capsCard : card
+                let target = spec.0.kind == .caps ? capsCard : spec.0.kind == .wifiUp || spec.0.kind == .wifiDown ? wifiCard : card
                 ctx.saveGState()
                 ctx.translateBy(x: CGFloat(col) * cw, y: CGFloat(row) * ch + ch - target.canvasH)
                 target.still(spec.0, repeat: spec.1, age: spec.2)
@@ -99,6 +101,10 @@ enum Sheet {
             (sourced(Content(kind: .copied, title: again[0], meta: L.chars(text.count), sub: text),
                      "Visual Studio Code · github.com · Pull request #1234: Add customizable source display", line: true), false, 1.2),
             (sourced(Content(kind: .fail, title: L.nothingCopied, sub: L.stillHolding + text), "Microsoft Word"), false, 1.2),
+            (Content(kind: .wifiUp, title: L.wifiSwitched("CoffeeShop"), sub: L.detail(L.wifiFrom("HomeNet"), L.band(5), L.signal(82))), false, 1.2),
+            (Content(kind: .wifiUp, title: L.wifiNowBand("HomeNet", 5), sub: L.detail(L.wifiWasBand(2), L.signal(74))), false, 1.2),
+            (Content(kind: .wifiUp, title: L.wifiReconnected("HomeNet"), sub: L.detail(L.wifiOffline(6), L.band(2), L.signal(91))), false, 1.2),
+            (Content(kind: .wifiDown, title: L.wifiDisconnected, sub: L.wifiWasOn("CoffeeShop")), false, 1.2),
         ]
     }
 }

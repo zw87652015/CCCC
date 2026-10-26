@@ -9,7 +9,8 @@ using System.Windows.Forms;
 
 namespace Cccc
 {
-    enum Kind { Copied, Cut, Info, Fail, Empty, Caps }
+    enum Kind { Copied, Cut, Info, Fail, Empty, Caps, WifiUp, WifiDown }
+    enum Role { Main, Caps, Wifi }
 
     sealed class Content
     {
@@ -39,7 +40,9 @@ namespace Cccc
         Font fTitle, fSub, fMeta, fBadge, fCaps;
 
         Settings st = new Settings();
+        readonly Role role;
         readonly bool caps;
+        Anchor.Spot wifiSpot;
         string sizeSig = "", themeSig = "", placeSig;
         Theme resolved;
         bool sysLight, slideDown;
@@ -64,9 +67,13 @@ namespace Cccc
         // Raised when the user drags a Freedom card to a new spot (0-1000 within the work area).
         public event Action<int, int> Moved;
 
-        public Card(bool caps = false)
+        // The network name the Wi-Fi card should anchor to (its tray button's name contains it).
+        public string WifiAnchorName;
+
+        public Card(Role role = Role.Main)
         {
-            this.caps = caps;
+            this.role = role;
+            caps = role == Role.Caps;
             fmt = new StringFormat(StringFormat.GenericTypographic);
             fmt.FormatFlags |= StringFormatFlags.NoWrap;
             fmt.Trimming = StringTrimming.EllipsisCharacter;
@@ -93,7 +100,7 @@ namespace Cccc
         {
             if (m.Msg == Native.WM_APP_FRAME) { vsync.Done(); if (shown) Frame(); return; }
             if (m.Msg == Native.WM_MOUSEACTIVATE) { m.Result = (IntPtr)Native.MA_NOACTIVATE; return; }
-            if (Pos == 10 && shown)
+            if (role != Role.Wifi && Pos == 10 && shown)
             {
                 if (m.Msg == Native.WM_LBUTTONDOWN) { BeginDrag(); return; }
                 if (m.Msg == Native.WM_MOUSEMOVE && drag) { DragMove(); return; }
@@ -191,7 +198,7 @@ namespace Cccc
                     W = (float)Math.Round(320 * (0.5 + 0.5 * k));
                     H = Math.Max(64, 25 + 39 * k);
                     Line = 18 * k;
-                    HMax = H + Line;
+                    HMax = role == Role.Wifi ? H : H + Line;
                 }
                 CanvasW = W + 2 * CX;
                 CanvasH = HMax + CY + 32;
@@ -256,8 +263,8 @@ namespace Cccc
             else tText = now;
             if (c.Kind == Kind.Fail) tShake = now;
             bool info = c.Kind == Kind.Info || c.Kind == Kind.Empty;
-            duration = caps ? st.CapsDurationMs / 1000.0 : (st.DurationMs + (info ? 700 : 0)) / 1000.0;
-            deadline = (caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : now + duration;
+            duration = role == Role.Wifi ? st.WifiDurationMs / 1000.0 : caps ? st.CapsDurationMs / 1000.0 : (st.DurationMs + (info ? 700 : 0)) / 1000.0;
+            deadline = (role == Role.Wifi ? st.WifiStayUntilClicked : caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : now + duration;
             visTarget = 1;
 
             if (!fresh) return;
@@ -271,31 +278,56 @@ namespace Cccc
 
         string PlaceSig()
         {
+            if (role == Role.Wifi)
+                return "W|" + Anchor.Sig + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple + "|" + WifiAnchorName;
             return Pos + "|" + FreeX + "|" + FreeY + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple
                 + (caps ? "|" + st.CapsPosition + "|" + st.CapsFreeX + "|" + st.CapsFreeY + "|" + st.CapsWidth + "|" + st.CapsHeight : "");
         }
 
         void Prepare()
         {
-            IntPtr fg = Native.GetForegroundWindow();
-            Native.POINT cp;
-            Native.GetCursorPos(out cp);
-            int pos = Pos;
-            IntPtr mon = fg != IntPtr.Zero && pos != 9 ? Native.MonitorFromWindow(fg, 2) : Native.MonitorFromPoint(cp, 2);
-            var mi = new Native.MONITORINFO { cbSize = Marshal.SizeOf(typeof(Native.MONITORINFO)) };
-            Native.GetMonitorInfo(mon, ref mi);
-            uint dpi = 96, dpiY;
-            try { if (Native.GetDpiForMonitor(mon, 0, out dpi, out dpiY) != 0) dpi = 96; }
-            catch (Exception) { dpi = 96; }
+            Rectangle work = Rectangle.Empty;
+            Point cursor = Point.Empty;
+            int pos = 0;
+            if (role == Role.Wifi)
+            {
+                float ds;
+                wifiSpot = Anchor.Wifi(WifiAnchorName, out ds);
+                DpiScale = ds;
+            }
+            else
+            {
+                IntPtr fg = Native.GetForegroundWindow();
+                Native.POINT cp;
+                Native.GetCursorPos(out cp);
+                cursor = new Point(cp.X, cp.Y);
+                pos = Pos;
+                IntPtr mon = fg != IntPtr.Zero && pos != 9 ? Native.MonitorFromWindow(fg, 2) : Native.MonitorFromPoint(cp, 2);
+                var mi = new Native.MONITORINFO { cbSize = Marshal.SizeOf(typeof(Native.MONITORINFO)) };
+                Native.GetMonitorInfo(mon, ref mi);
+                uint dpi = 96, dpiY;
+                try { if (Native.GetDpiForMonitor(mon, 0, out dpi, out dpiY) != 0) dpi = 96; }
+                catch (Exception) { dpi = 96; }
+                DpiScale = dpi / 96f;
+                work = Rectangle.FromLTRB(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom);
+            }
 
-            DpiScale = dpi / 96f;
             bool light = Theme.SystemLight();
             if (light != sysLight) Resolve(light);
             Layout(DpiScale * st.Scale / 100f, resolved);
 
-            slideDown = pos <= 2 || (pos == 10 && FreeY < 333);
-            var work = Rectangle.FromLTRB(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom);
-            Point p = Place(pos, work, new Size(Px(W), Px(HMax)), new Point(cp.X, cp.Y), Px(Edge), FreeX, FreeY);
+            Point p;
+            if (role == Role.Wifi)
+            {
+                bool down;
+                p = Anchor.Place(wifiSpot, new Size(Px(W), Px(HMax)), Px(Edge), out down);
+                slideDown = down;
+            }
+            else
+            {
+                slideDown = pos <= 2 || (pos == 10 && FreeY < 333);
+                p = Place(pos, work, new Size(Px(W), Px(HMax)), cursor, Px(Edge), FreeX, FreeY);
+            }
             baseX = p.X - Px(CX);
             baseY = p.Y + Px(HMax) - Px(CY + HMax);
             placeSig = PlaceSig();
@@ -448,7 +480,7 @@ namespace Cccc
             if (cur == null) { g.Clear(Color.Transparent); return; }
             if (shadowH != CardH || shadowTheme != th) Layout(s, th);
 
-            bool warn = cur.Kind == Kind.Fail || cur.Kind == Kind.Empty;
+            bool warn = cur.Kind == Kind.Fail || cur.Kind == Kind.Empty || cur.Kind == Kind.WifiDown;
             Color accent = cur.Kind == Kind.Caps ? (cur.CapsOn ? th.Ok : th.Meta) : (warn ? th.Warn : th.Ok);
             double te = now - tEvent;
 
@@ -491,7 +523,7 @@ namespace Cccc
                     g.DrawPath(pen, path);
 
             double remain = Ease.Clamp01((deadline - now) / duration);
-            if (visTarget > 0 && remain > 0 && !(caps ? st.CapsStayUntilClicked : st.StayUntilClicked))
+            if (visTarget > 0 && remain > 0 && !(role == Role.Wifi ? st.WifiStayUntilClicked : caps ? st.CapsStayUntilClicked : st.StayUntilClicked))
             {
                 float x0 = CX + R, x1 = CX + W - R, y = Top + CardH - 3f;
                 using (var pen = new Pen(Color.FromArgb(th.Dark ? 70 : 60, accent), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
@@ -538,6 +570,26 @@ namespace Cccc
                     using (var b = new SolidBrush(Color.FromArgb((int)(255 * Ease.Clamp01(pc)), glyph)))
                         g.FillPath(b, gp);
                     g.Restore(gs);
+                }
+                return;
+            }
+            if (cur.Kind == Kind.WifiUp || cur.Kind == Kind.WifiDown)
+            {
+                // Wi-Fi glyph: two arcs then the dot, each stroke growing in; a slash marks a drop.
+                double a1 = Ease.Clamp01(pc / 0.4), a2 = Ease.Clamp01((pc - 0.3) / 0.4);
+                double a3 = Ease.Clamp01((pc - 0.55) / 0.3), a4 = Ease.Clamp01((pc - 0.7) / 0.3);
+                float d = 4.5f * k;
+                using (var pen = new Pen(glyph, 2.3f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                {
+                    if (a1 > 0) g.DrawArc(pen, ix - 10.5f * k, iy + d - 10.5f * k, 21f * k, 21f * k, 205, 130 * (float)a1);
+                    if (a2 > 0) g.DrawArc(pen, ix - 6f * k, iy + d - 6f * k, 12f * k, 12f * k, 205, 130 * (float)a2);
+                    if (a3 > 0)
+                    {
+                        float dr = 1.9f * k * (float)Ease.OutBack(a3);
+                        using (var b = new SolidBrush(glyph)) g.FillEllipse(b, ix - dr, iy + d - dr, 2 * dr, 2 * dr);
+                    }
+                    if (cur.Kind == Kind.WifiDown && a4 > 0)
+                        Shapes.Partial(g, pen, new[] { new PointF(ix - 8.5f * k, iy + 11f * k), new PointF(ix + 8.5f * k, iy - 9f * k) }, a4);
                 }
                 return;
             }

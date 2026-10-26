@@ -1,7 +1,8 @@
 import AppKit
 import CoreText
 
-enum Kind { case copied, cut, info, fail, empty, caps }
+enum Kind { case copied, cut, info, fail, empty, caps, wifiUp, wifiDown }
+enum Role { case main, caps, wifi }
 
 final class Content {
     var kind: Kind
@@ -64,7 +65,8 @@ final class Card {
 
     // Metrics for the current text scale (k) and user size (sc); `defaults` pins both to 100 for the design sheet.
     private let defaults: Bool
-    let caps: Bool
+    let role: Role
+    var caps: Bool { role == .caps }
     private(set) var W: CGFloat = 320, H: CGFloat = 64, line: CGFloat = 18, hMax: CGFloat = 82
     private(set) var canvasW: CGFloat = 368, canvasH: CGFloat = 134
     private(set) var k: CGFloat = 1, sc: CGFloat = 1
@@ -92,9 +94,9 @@ final class Card {
 
     var now: Double { ProcessInfo.processInfo.systemUptime }
 
-    init(defaults: Bool = false, caps: Bool = false) {
+    init(defaults: Bool = false, role: Role = .main) {
         self.defaults = defaults
-        self.caps = caps
+        self.role = role
         let frame = NSRect(x: 0, y: 0, width: 368, height: 134)
         panel = CardPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         root = CardRoot(frame: frame)
@@ -139,7 +141,7 @@ final class Card {
                 W = (320 * (0.5 + 0.5 * k)).rounded()
                 H = max(64, 25 + 39 * k)
                 line = 18 * k
-                hMax = H + line
+                hMax = role == .wifi ? H : H + line
             }
             canvasW = W + 2 * Card.CX
             canvasH = hMax + Card.CY + 32
@@ -290,8 +292,8 @@ final class Card {
         }
         if c.kind == .fail { tShake = t }
         let info = c.kind == .info || c.kind == .empty
-        duration = Double(caps ? Prefs.capsDurationMs : Prefs.durationMs + (info ? 700 : 0)) / 1000
-        deadline = (caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) ? .infinity : t + duration
+        duration = Double(role == .wifi ? Prefs.wifiDurationMs : caps ? Prefs.capsDurationMs : Prefs.durationMs + (info ? 700 : 0)) / 1000
+        deadline = (role == .wifi ? Prefs.wifiStayUntilClicked : caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) ? .infinity : t + duration
         visTarget = 1
 
         if !fresh { return }
@@ -317,6 +319,9 @@ final class Card {
     private var pos: Int { caps && Prefs.capsPosition >= 0 ? Prefs.capsPosition : Prefs.position }
 
     private func placeSignature() -> String {
+        if role == .wifi {
+            return "W|\(wifiAnchor()?.x ?? -1)|\(Prefs.scale)|\(Prefs.textScale)|\(Prefs.fontFamily ?? "")|\(Prefs.simple)"
+        }
         let s = "\(Prefs.position)|\(Prefs.scale)|\(Prefs.textScale)|\(Prefs.fontFamily ?? "")|\(Prefs.simple)"
         return caps ? s + "|\(Prefs.capsPosition)|\(Prefs.capsWidth)|\(Prefs.capsHeight)" : s
     }
@@ -324,12 +329,44 @@ final class Card {
     private func prepare() {
         placeSig = placeSignature()
         apply()
+        if role == .wifi {
+            // Under Control Center on the menu-bar screen; top-right when it can't be found.
+            let vf = NSScreen.screens[0].visibleFrame
+            let margin = Card.edge * sc
+            let w = W * sc, h = hMax * sc
+            let cx = wifiAnchor()?.x ?? vf.maxX - margin - w / 2
+            let x = max(vf.minX + margin, min(cx - w / 2, vf.maxX - margin - w))
+            slot = CGPoint(x: x, y: vf.maxY - margin - h)
+            slideDown = true
+            return
+        }
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
         let pos = self.pos == 10 ? roll() : self.pos
         slideDown = pos <= 2
         slot = Card.place(pos: pos, work: screen.visibleFrame, card: CGSize(width: W * sc, height: hMax * sc),
                           cursor: mouse, margin: Card.edge * sc)
+    }
+
+    // Control Center's menu-bar item: its process's status-layer windows hug the top of the
+    // menu-bar screen; sorted by x, the clock is rightmost and Control Center is next to it.
+    private func wifiAnchor() -> CGPoint? {
+        guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.controlcenter").first?.processIdentifier else { return nil }
+        let status = Int(CGWindowLevelForKey(.statusWindow))
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        var items: [CGRect] = []
+        for w in list {
+            guard (w[kCGWindowOwnerPID as String] as? Int ?? -1) == Int(pid),
+                  (w[kCGWindowLayer as String] as? Int ?? -1) == status,
+                  let b = w[kCGWindowBounds as String] as? [String: Any],
+                  let r = CGRect(dictionaryRepresentation: b as CFDictionary),
+                  r.minY < 40, r.height <= 40 else { continue }
+            items.append(r)
+        }
+        items.sort { $0.minX < $1.minX }
+        dbg("wifi anchor: \(items.count) control center candidates: \(items)")
+        guard items.count >= 2 else { return nil }
+        return CGPoint(x: items[items.count - 2].midX, y: 0)
     }
 
     private func cursorInCard() -> Bool {
@@ -375,7 +412,7 @@ final class Card {
     func render(_ ctx: CGContext, now t: Double) {
         guard let c = cur else { return }
 
-        let warn = c.kind == .fail || c.kind == .empty
+        let warn = c.kind == .fail || c.kind == .empty || c.kind == .wifiDown
         let accent = c.kind == .caps ? (c.capsOn ? th.ok : th.meta) : (warn ? th.warn : th.ok)
         let te = t - tEvent
         let m = ctx.userSpaceToDeviceSpaceTransform
@@ -432,7 +469,7 @@ final class Card {
         }
 
         let remain = Ease.clamp01((deadline - t) / duration)
-        if visTarget > 0 && remain > 0 && !(caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) {
+        if visTarget > 0 && remain > 0 && !(role == .wifi ? Prefs.wifiStayUntilClicked : caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) {
             let x0 = Card.CX + rad, x1 = Card.CX + W - rad, y = cardTop + cardH - 3
             ctx.setStrokeColor(accent.withAlphaComponent(th.dark ? 70 / 255 : 60 / 255).cgColor)
             ctx.setLineWidth(2)
@@ -503,6 +540,36 @@ final class Card {
             ctx.textMatrix = CGAffineTransform(translationX: -b.midX, y: b.midY).scaledBy(x: 1, y: -1)
             CTLineDraw(line, ctx)
             ctx.restoreGState()
+            return
+        }
+        if cur?.kind == .wifiUp || cur?.kind == .wifiDown {
+            // Wi-Fi glyph: two arcs then the dot, each stroke growing in; a slash marks a drop.
+            let a1 = Ease.clamp01(pc / 0.4), a2 = Ease.clamp01((pc - 0.3) / 0.4)
+            let a3 = Ease.clamp01((pc - 0.55) / 0.3), a4 = Ease.clamp01((pc - 0.7) / 0.3)
+            let d = 4.5 * k, s = Double.pi / 180
+            ctx.setStrokeColor(glyph)
+            ctx.setLineWidth(2.3)
+            ctx.setLineCap(.round)
+            if a1 > 0 {
+                ctx.beginPath()
+                ctx.addArc(center: CGPoint(x: ix, y: iy + d), radius: 10.5 * k,
+                           startAngle: CGFloat(205 * s), endAngle: CGFloat((205 + 130 * a1) * s), clockwise: false)
+                ctx.strokePath()
+            }
+            if a2 > 0 {
+                ctx.beginPath()
+                ctx.addArc(center: CGPoint(x: ix, y: iy + d), radius: 6 * k,
+                           startAngle: CGFloat(205 * s), endAngle: CGFloat((205 + 130 * a2) * s), clockwise: false)
+                ctx.strokePath()
+            }
+            if a3 > 0 {
+                let dr = 1.9 * k * CGFloat(Ease.outBack(a3))
+                ctx.setFillColor(glyph)
+                ctx.fillEllipse(in: CGRect(x: ix - dr, y: iy + d - dr, width: 2 * dr, height: 2 * dr))
+            }
+            if cur?.kind == .wifiDown && a4 > 0 {
+                strokePartial(ctx, [CGPoint(x: ix - 8.5 * k, y: iy + 11 * k), CGPoint(x: ix + 8.5 * k, y: iy - 9 * k)], a4)
+            }
             return
         }
         ctx.setStrokeColor(glyph)

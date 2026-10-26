@@ -37,5 +37,9 @@
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSLocationUsageDescription</key>
+    <string>CCCC shows the Wi-Fi network name when your connection changes. macOS needs Location access to read it.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>CCCC shows the Wi-Fi network name when your connection changes. macOS needs Location access to read it.</string>
 </dict>
 </plist>

@@ -12,14 +12,16 @@ namespace Cccc
     {
         readonly Settings set = Settings.Load();
         readonly Card card = new Card();
-        readonly Card capsCard = new Card(true);
+        readonly Card capsCard = new Card(Role.Caps);
+        readonly Card wifiCard = new Card(Role.Wifi);
+        readonly WifiWatch wifi = new WifiWatch();
         readonly Hub hub = new Hub();
         readonly KeyHook hook;
         readonly NotifyIcon tray = new NotifyIcon();
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
         readonly Timer updateTimer = new Timer { Interval = 10000 };
-        readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
+        readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
         readonly MenuItem[] miDetails = new MenuItem[4];
         readonly MenuItem miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miCustomize, miUpdate, miQuit;
         readonly SynchronizationContext ui;
@@ -58,6 +60,8 @@ namespace Cccc
                 set.CapsFreeY = y;
                 Changed();
             };
+            wifiCard.CreateWindow();
+            wifi.Changed += OnWifi;
             hook = new KeyHook(hub.Handle);
 
             hub.ClipboardChanged += delegate { debounce.Stop(); debounce.Start(); };
@@ -73,6 +77,7 @@ namespace Cccc
             miStopSounds = new MenuItem(L.MenuStopSounds, delegate { sounds.StopAll(); }) { Enabled = false };
             miHint = new MenuItem(L.MenuHint, delegate { set.FailHint = !set.FailHint; set.Save(); Sync(); });
             miCaps = new MenuItem(L.MenuCaps, delegate { set.CapsHint = !set.CapsHint; set.Save(); Sync(); });
+            miWifi = new MenuItem(L.MenuWifi, delegate { set.WifiHint = !set.WifiHint; set.Save(); Sync(); });
             miSourceOn = new MenuItem(L.MenuSourceOn, delegate { set.ShowSource = !set.ShowSource; set.Save(); Sync(); });
             miWhen = new MenuItem(L.SourceWhen) { Enabled = false };
             miWhenAlways = new MenuItem(L.SourceAlways, delegate { Pick(ref set.SourceWhen, 0); }) { RadioCheck = true };
@@ -102,13 +107,18 @@ namespace Cccc
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miCaps, miSource, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miSource, miStartup, miAutoUpdate, miLang,
                 new MenuItem("-"), miCustomize, miUpdate,
                 new MenuItem("-"), miQuit,
             });
             tray.ContextMenu.Popup += delegate { miStopSounds.Enabled = sounds.Playing; };
             tray.MouseClick += (o, e) => { if (e.Button == MouseButtons.Left) ShowClipboard(); };
             SystemEvents.UserPreferenceChanged += (o, e) => { if (e.Category == UserPreferenceCategory.General) Sync(); };
+            SystemEvents.PowerModeChanged += delegate(object o, PowerModeChangedEventArgs e)
+            {
+                if (e.Mode == PowerModes.Suspend) wifi.Suspend();
+                else if (e.Mode == PowerModes.Resume) wifi.Resume();
+            };
 
             if (Settings.AutoStart) Settings.AutoStart = true;
             Sync();
@@ -150,7 +160,7 @@ namespace Cccc
         {
             if (customize == null)
             {
-                customize = new Customize(set, Changed, ShowSample, ShowCapsSample, TestSound);
+                customize = new Customize(set, Changed, ShowSample, ShowCapsSample, ShowWifiSample, TestSound, wifi);
                 customize.Closed += delegate { customize = null; };
             }
             customize.Show();
@@ -180,6 +190,58 @@ namespace Cccc
             capsCard.Show(new Content { Kind = Kind.Caps, Title = L.Caps, CapsOn = Native.CapsLock() }, false);
         }
 
+        // The preview shows the real current connection, not fake data.
+        void ShowWifiSample()
+        {
+            var ch = wifi.Current();
+            if (ch == null)
+            {
+                if (!wifi.Available)
+                    wifiCard.Show(new Content { Kind = Kind.WifiDown, Title = L.WifiNoAdapter }, false);
+                return;
+            }
+            Content c;
+            if (!ch.Connected)
+                c = new Content { Kind = Kind.WifiDown, Title = L.WifiDisconnected };
+            else if (ch.Name != null)
+                c = new Content { Kind = Kind.WifiUp, Title = L.WifiConnected(ch.Name),
+                                  Sub = L.Detail(L.Band(ch.Band), ch.Signal >= 0 ? L.Signal(ch.Signal) : null) };
+            else
+                c = new Content { Kind = Kind.WifiUp, Title = L.WifiConnected(null), Sub = L.WifiNeedLocation };
+            wifiCard.WifiAnchorName = ch.Name;
+            wifiCard.Show(c, false);
+        }
+
+        void OnWifi(WifiWatch.Change ch)
+        {
+            if (!set.WifiHint || set.Paused || Native.UserBusy()) return;
+            wifiCard.WifiAnchorName = ch.Name ?? ch.Prev;
+            string sig = ch.Signal >= 0 ? L.Signal(ch.Signal) : null;
+            var c = new Content { Kind = ch.Kind == WifiWatch.Disconnected ? Kind.WifiDown : Kind.WifiUp };
+            if (ch.Kind == WifiWatch.Switched)
+            {
+                c.Title = L.WifiSwitched(ch.Name);
+                c.Sub = ch.Name == null ? L.WifiNeedLocation
+                    : L.Detail(ch.Prev != null ? L.WifiFrom(ch.Prev) : null, L.Band(ch.Band), sig);
+            }
+            else if (ch.Kind == WifiWatch.BandChanged)
+            {
+                c.Title = L.WifiNowBand(ch.Name, ch.Band);
+                c.Sub = ch.Name == null ? L.WifiNeedLocation : L.Detail(L.WifiWasBand(ch.PrevBand), sig);
+            }
+            else if (ch.Kind == WifiWatch.Reconnected)
+            {
+                c.Title = L.WifiReconnected(ch.Name);
+                c.Sub = ch.Name == null ? L.WifiNeedLocation : L.Detail(L.WifiOffline(ch.Seconds), L.Band(ch.Band), sig);
+            }
+            else
+            {
+                c.Title = L.WifiDisconnected;
+                c.Sub = ch.Prev != null ? L.WifiWasOn(ch.Prev) : (ch.Name == null ? L.WifiNeedLocation : null);
+            }
+            wifiCard.Show(c, false);
+        }
+
         void TestSound(bool ok)
         {
             if (ok) sounds.Ok(); else sounds.No();
@@ -190,12 +252,15 @@ namespace Cccc
             L.Apply(set.Lang);
             card.Apply(set);
             capsCard.Apply(set);
+            wifiCard.Apply(set);
+            if (set.WifiHint) wifi.Start(ui); else wifi.Stop();
             miShow.Text = L.MenuShow;
             miPause.Text = L.MenuPause;
             miSound.Text = L.MenuSound;
             miStopSounds.Text = L.MenuStopSounds;
             miHint.Text = L.MenuHint;
             miCaps.Text = L.MenuCaps;
+            miWifi.Text = L.MenuWifi;
             miSource.Text = L.MenuSource;
             miSourceOn.Text = L.MenuSourceOn;
             miWhen.Text = L.SourceWhen;
@@ -216,6 +281,7 @@ namespace Cccc
             miSound.Checked = set.Sound;
             miHint.Checked = set.FailHint;
             miCaps.Checked = set.CapsHint;
+            miWifi.Checked = set.WifiHint;
             miSourceOn.Checked = set.ShowSource;
             miWhenAlways.Checked = set.SourceWhen == 0;
             miWhenAuto.Checked = set.SourceWhen == 1;
@@ -429,8 +495,10 @@ namespace Cccc
             tray.Visible = false;
             tray.Dispose();
             hub.Close();
+            wifi.Stop();
             card.DestroyHandle();
             capsCard.DestroyHandle();
+            wifiCard.DestroyHandle();
             Application.Exit();
         }
     }
