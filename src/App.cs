@@ -47,13 +47,6 @@ namespace Cccc
         {
             ui = new WindowsFormsSynchronizationContext();
             L.Apply(set.Lang);
-            // A manual start asks about the tray icon; --silent (sign-in) and --updated reuse the saved choice.
-            if (!silent && !updated)
-            {
-                set.HideTray = MessageBox.Show(L.TrayPrompt, "CCCC", MessageBoxButtons.YesNo, MessageBoxIcon.Information,
-                    set.HideTray ? MessageBoxDefaultButton.Button2 : MessageBoxDefaultButton.Button1) == DialogResult.No;
-                set.Save();
-            }
             sounds.Load(set.SoundOkFile, set.SoundFailFile);
             card.CreateWindow();
             card.Moved += delegate(int x, int y)

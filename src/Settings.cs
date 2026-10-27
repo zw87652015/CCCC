@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Media;
+using System.Reflection;
 using System.Text;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -164,6 +166,81 @@ namespace Cccc
             OkColor = WarnColor = BgColor = BorderColor = TitleColor = SubColor = MetaColor = null;
             FontFamily = SoundOkFile = SoundFailFile = null;
             ShowSource = true; SourceWhen = 1; SourceDetail = 1;
+        }
+
+        // Per-machine state that a settings file never carries.
+        static readonly string[] NotPortable = { "Paused", "HideTray" };
+
+        static IEnumerable<FieldInfo> PortableFields()
+        {
+            foreach (FieldInfo f in typeof(Settings).GetFields(BindingFlags.Public | BindingFlags.Instance))
+                if (Array.IndexOf(NotPortable, f.Name) < 0) yield return f;
+        }
+
+        public string ToJson()
+        {
+            var values = new Dictionary<string, object>();
+            foreach (FieldInfo f in PortableFields())
+            {
+                object v = f.GetValue(this);
+                if (v != null) values[f.Name] = v;
+            }
+            var doc = new Dictionary<string, object> { { "format", "cccc-settings" }, { "version", 1 }, { "settings", values } };
+            return new JavaScriptSerializer().Serialize(doc);
+        }
+
+        // Writes the file's values into the registry, then reads them back through Load so every value is validated.
+        // Missing or mistyped values are removed, which gives the default.
+        public static Settings Import(string json)
+        {
+            var doc = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
+            var vals = Pick(doc, "settings") as Dictionary<string, object>;
+            if (vals == null || !"cccc-settings".Equals(Pick(doc, "format")) || !(Pick(doc, "version") is int) || (int)Pick(doc, "version") != 1)
+                throw new FormatException("Not a CCCC settings file.");
+            using (var k = Registry.CurrentUser.CreateSubKey(Key))
+                foreach (FieldInfo f in PortableFields())
+                {
+                    object v = Pick(vals, f.Name);
+                    if (f.FieldType == typeof(bool) || f.FieldType == typeof(int))
+                    {
+                        if (v is bool) v = (bool)v ? 1 : 0;
+                        if (v is int) k.SetValue(f.Name, (int)v, RegistryValueKind.DWord);
+                        else k.DeleteValue(f.Name, false);
+                    }
+                    else if (f.FieldType == typeof(string))
+                    {
+                        string text = v as string;
+                        if (!string.IsNullOrEmpty(text)) k.SetValue(f.Name, text, RegistryValueKind.String);
+                        else k.DeleteValue(f.Name, false);
+                    }
+                    else
+                    {
+                        var list = new List<string>();
+                        object[] items = v as object[];
+                        if (items != null)
+                            foreach (object item in items)
+                                if (item is string) list.Add((string)item);
+                        if (list.Count > 0) k.SetValue(f.Name, list.ToArray(), RegistryValueKind.MultiString);
+                        else k.DeleteValue(f.Name, false);
+                    }
+                }
+            return Load();
+        }
+
+        public void CopyFrom(Settings s)
+        {
+            foreach (FieldInfo f in typeof(Settings).GetFields(BindingFlags.Public | BindingFlags.Instance))
+            {
+                object v = f.GetValue(s);
+                if (v is List<string>) v = new List<string>((List<string>)v);
+                f.SetValue(this, v);
+            }
+        }
+
+        static object Pick(Dictionary<string, object> d, string name)
+        {
+            object v;
+            return d != null && d.TryGetValue(name, out v) ? v : null;
         }
 
         static bool Flag(RegistryKey k, string name, bool fallback)

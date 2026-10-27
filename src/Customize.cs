@@ -550,6 +550,11 @@ namespace Cccc
             rbLang = lang;
             string[] codes = { "auto", "en", "zh" };
             for (int i = 0; i < 3; i++) { int idx = i; BindRadio(rbLang[i], delegate { set.Lang = codes[idx]; }); }
+            var exportBtn = new Button { Style = Res<Style>("Subtle"), Content = L.Export, VerticalAlignment = VerticalAlignment.Center };
+            var importBtn = new Button { Style = Res<Style>("Subtle"), Content = L.Import, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            exportBtn.Click += delegate { ExportSettings(); };
+            importBtn.Click += delegate { ImportSettings(); };
+            var fileButtons = new StackPanel { Orientation = Orientation.Horizontal, Children = { exportBtn, importBtn } };
             cmbIgnore = new ComboBox { Style = Res<Style>("Cmb") };
             cmbIgnore.DropDownOpened += delegate { FillIgnore(); };
             cmbIgnore.SelectionChanged += delegate { PickIgnore(); };
@@ -563,7 +568,30 @@ namespace Cccc
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
                 SettingCard(L.MenuTray, L.HintTray, chkTray),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
-                SettingCard(L.MenuLanguage, L.HintLanguage, langSeg));
+                SettingCard(L.MenuLanguage, L.HintLanguage, langSeg),
+                SettingCard(L.SettingsFile, L.HintSettingsFile, fileButtons));
+        }
+
+        void ExportSettings()
+        {
+            var dlg = new SaveFileDialog { FileName = "CCCC settings.json", Filter = "JSON (*.json)|*.json" };
+            if (dlg.ShowDialog(w) != true) return;
+            try { System.IO.File.WriteAllText(dlg.FileName, set.ToJson(), new System.Text.UTF8Encoding(false)); }
+            catch (Exception e) { MessageBox.Show(w, L.ExportFailed + "\n" + e.Message, "CCCC"); }
+        }
+
+        void ImportSettings()
+        {
+            var dlg = new OpenFileDialog { Filter = "JSON (*.json)|*.json" };
+            if (dlg.ShowDialog(w) != true) return;
+            try
+            {
+                if (new System.IO.FileInfo(dlg.FileName).Length > 1 << 20) throw new FormatException("File too large.");
+                set.CopyFrom(Settings.Import(System.IO.File.ReadAllText(dlg.FileName)));
+                changed();
+                Reload();
+            }
+            catch (Exception e) { MessageBox.Show(w, L.ImportFailed + "\n" + e.Message, "CCCC"); }
         }
 
         StackPanel BuildAppearance()
