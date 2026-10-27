@@ -270,8 +270,10 @@ namespace Cccc
         {
             double now = Now;
             bool fresh = !shown;
-            if (fresh || placeSig != PlaceSig()) Prepare();
-            if (!fresh && th.Glass) CaptureBackdrop();
+            // Near-pointer cards follow the pointer on every trigger, even while still showing.
+            bool follow = !fresh && !Tray && Pos == 9;
+            if (fresh || follow || placeSig != PlaceSig()) Prepare();
+            if (!fresh && !follow && th.Glass) CaptureBackdrop();
 
             string oldTitle = cur != null ? cur.Title : null;
             if (cur != null && cur.Thumb != null && cur.Thumb != c.Thumb) cur.Thumb.Dispose();
@@ -288,7 +290,12 @@ namespace Cccc
                 : caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : now + duration;
             visTarget = 1;
 
-            if (!fresh) { Arrange(); return; }
+            if (!fresh)
+            {
+                Arrange();
+                if (follow) { stackDY = stackTarget; if (th.Glass) CaptureBackdrop(); }   // jump, no glide from the old spot
+                return;
+            }
             vis = 0; last = now; shown = true;
             stack.Add(this);
             Arrange();

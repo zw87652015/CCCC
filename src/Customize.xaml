@@ -18,6 +18,7 @@
     <SolidColorBrush x:Key="AccentHalf" Color="#8030D158"/>
     <SolidColorBrush x:Key="AccentText" Color="#000000"/>
     <SolidColorBrush x:Key="PressFill" Color="#08FFFFFF"/>
+    <SolidColorBrush x:Key="HoverFill" Color="#15FFFFFF"/>
     <SolidColorBrush x:Key="ThumbFill" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="ThumbStroke" Color="#33000000"/>
     <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
@@ -256,7 +257,7 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="{DynamicResource CardSurface}"/>
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource HoverFill}"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
                 <Setter TargetName="bd" Property="Background" Value="{DynamicResource PressFill}"/>
@@ -528,8 +529,8 @@
                          HorizontalAlignment="Left" Margin="5,0,0,0" Visibility="Collapsed"/>
             </Grid>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ControlFill}"/>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource NavFill}"/>
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
                 <Setter TargetName="pill" Property="Visibility" Value="Visible"/>
@@ -553,10 +554,18 @@
                             IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
                 <ToggleButton.Template>
                   <ControlTemplate TargetType="ToggleButton">
-                    <Border CornerRadius="4" Background="{DynamicResource ControlFill}" BorderBrush="{DynamicResource ControlStroke}" BorderThickness="1">
+                    <Border x:Name="bd" CornerRadius="4" Background="{DynamicResource ControlFill}" BorderBrush="{DynamicResource ControlStroke}" BorderThickness="1">
                       <TextBlock Text="&#xE70D;" FontFamily="{DynamicResource IconFont}" FontSize="10"
                                  Foreground="{DynamicResource SecondaryText}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     </Border>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="bd" Property="Background" Value="{DynamicResource HoverFill}"/>
+                      </Trigger>
+                      <Trigger Property="IsChecked" Value="True">
+                        <Setter TargetName="bd" Property="Background" Value="{DynamicResource PressFill}"/>
+                      </Trigger>
+                    </ControlTemplate.Triggers>
                   </ControlTemplate>
                 </ToggleButton.Template>
               </ToggleButton>

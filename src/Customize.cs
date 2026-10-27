@@ -242,7 +242,8 @@ namespace Cccc
                 string e = exe;
                 var remove = new Button { Style = Res<Style>("Subtle"), Content = L.Remove };
                 remove.Click += delegate { Edit(delegate { set.IgnoreApps.Remove(e); }); };
-                ignoreList.Children.Add(Box(CardGrid(Sources.NameFor(e), e + ".exe", remove)));
+                ignoreList.Children.Add(Divider());
+                ignoreList.Children.Add(CardGrid(Sources.NameFor(e), e + ".exe", remove));
             }
             loading = false;
             card.Apply(set);
@@ -311,6 +312,7 @@ namespace Cccc
             w.Resources["ControlStroke"] = Solid(dark ? "#18FFFFFF" : "#14000000");
             w.Resources["NavFill"] = Solid(dark ? "#0FFFFFFF" : "#09000000");
             w.Resources["PressFill"] = Solid(dark ? "#08FFFFFF" : "#4DF9F9F9");
+            w.Resources["HoverFill"] = Solid(dark ? "#15FFFFFF" : "#80F9F9F9");
             w.Resources["ThumbFill"] = Solid("#FFFFFF");
             w.Resources["ThumbStroke"] = Solid("#33000000");
             w.Resources["UiFont"] = new FontFamily(L.Zh ? "Microsoft YaHei UI" : FirstInstalled("Segoe UI Variable Text", "Segoe UI"));
@@ -556,8 +558,8 @@ namespace Cccc
             return PageOf(
                 SettingCard(L.MenuPause, L.HintPause, chkPause),
                 SettingCard(L.MenuHint, L.HintWarn, chkWarn),
-                SettingCard(L.IgnoreApps, L.HintIgnore, cmbIgnore),
-                ignoreList,
+                // Ignored apps are rows inside their setting's card, not cards of their own.
+                Box(PageOf(CardGrid(L.IgnoreApps, L.HintIgnore, cmbIgnore), ignoreList)),
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
                 SettingCard(L.MenuTray, L.HintTray, chkTray),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
