@@ -102,6 +102,8 @@ namespace Cccc
 
         public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action onShowWifi, Action onShowAudio, Action<bool> onTest, WifiWatch wifiWatch)
         {
+            // Software rendering keeps WPF off the GPU drivers (~24 MB of d3d9 + vendor UMD).
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
             set = settings;
             changed = onChanged;
             showSample = onShowSample;

@@ -78,6 +78,9 @@ namespace Cccc
         // Raised when the user drags a Freedom card to a new spot (0-1000 within the work area).
         public event Action<int, int> Moved;
 
+        // Raised when the last visible card hides (the stack is empty again).
+        public static event Action AllHidden;
+
         // The name the tray-anchored card should anchor to (its tray button's name contains it).
         public string AnchorName;
 
@@ -226,7 +229,7 @@ namespace Cccc
                 themeSig = theme;
                 Resolve(sys);
             }
-            Layout(DpiScale * st.Scale / 100f, resolved);
+            if (shown) Layout(DpiScale * st.Scale / 100f, resolved);
             if (th.Glass && backdrop == null && shown) CaptureBackdrop();
         }
 
@@ -566,10 +569,16 @@ namespace Cccc
             vsync.Stop();
             Native.ShowWindow(Handle, Native.SW_HIDE);
             shown = false;
+            // Free the drawing buffers; Prepare/Layout rebuild them on the next Show.
+            if (surf != null) { surf.Dispose(); surf = null; }
+            if (shadow != null) { shadow.Dispose(); shadow = null; }
+            shadowPx = null; plainShadow = null; backdrop = null; glideStrip = null;
+            shadowTheme = null; stripTarget = double.NaN;
             if (stack.Remove(this))
             {
                 stackDY = stackTarget = 0;
                 Arrange();   // the rest glide back to their home spots
+                if (stack.Count == 0 && AllHidden != null) AllHidden();
             }
         }
 

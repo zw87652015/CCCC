@@ -23,6 +23,7 @@ namespace Cccc
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
         readonly Timer updateTimer = new Timer { Interval = 10000 };
+        readonly Timer trim = new Timer { Interval = 3000 };
         readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miAudio, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
         readonly MenuItem[] miDetails = new MenuItem[4];
         readonly MenuItem miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miCustomize, miUpdate, miQuit;
@@ -81,6 +82,8 @@ namespace Cccc
             debounce.Tick += delegate { debounce.Stop(); OnClipboard(); };
             failCheck.Tick += delegate { failCheck.Stop(); OnFailCheck(); };
             updateTimer.Tick += delegate { updateTimer.Interval = 24 * 60 * 60 * 1000; if (set.AutoUpdate) CheckUpdate(false); };
+            trim.Tick += delegate { trim.Stop(); if (customize == null) Native.TrimMemory(); };
+            Card.AllHidden += delegate { trim.Stop(); trim.Start(); };
 
             miShow = new MenuItem(L.MenuShow, delegate { ShowClipboard(); }) { DefaultItem = true };
             miPause = new MenuItem(L.MenuPause, delegate { set.Paused = !set.Paused; set.Save(); Sync(); });
@@ -136,6 +139,7 @@ namespace Cccc
             Sync();
             hook.Start();
             updateTimer.Start();
+            trim.Start();
 
             lastSeq = Native.GetClipboardSequenceNumber();
             var now = ClipReader.Read();
@@ -172,7 +176,7 @@ namespace Cccc
             if (customize == null)
             {
                 customize = new Customize(set, Changed, ShowSample, ShowCapsSample, ShowWifiSample, ShowAudioSample, TestSound, wifi);
-                customize.Closed += delegate { customize = null; };
+                customize.Closed += delegate { customize = null; trim.Stop(); trim.Start(); };
             }
             customize.Show();
             customize.Activate();
