@@ -7,6 +7,7 @@ enum Sheet {
         let card = Card(defaults: true)
         let capsCard = Card(defaults: true, role: .caps)
         let wifiCard = Card(defaults: true, role: .wifi)
+        let audioCard = Card(defaults: true, role: .audio)
         let cw = card.canvasW, ch = card.canvasH
         let rows = rowSpecs()
         let iconRow: CGFloat = 80
@@ -29,8 +30,10 @@ enum Sheet {
             card.th = theme
             capsCard.th = theme
             wifiCard.th = theme
+            audioCard.th = theme
             for (row, spec) in rows.enumerated() {
-                let target = spec.0.kind == .caps ? capsCard : spec.0.kind == .wifiUp || spec.0.kind == .wifiDown ? wifiCard : card
+                let target = spec.0.kind == .caps ? capsCard : spec.0.kind == .wifiUp || spec.0.kind == .wifiDown ? wifiCard
+                    : spec.0.kind == .audio || spec.0.kind == .audioWarn ? audioCard : card
                 ctx.saveGState()
                 ctx.translateBy(x: CGFloat(col) * cw, y: CGFloat(row) * ch + ch - target.canvasH)
                 target.still(spec.0, repeat: spec.1, age: spec.2)
@@ -71,6 +74,13 @@ enum Sheet {
         return ctx.makeImage()!
     }
 
+    private static func audio(_ kind: Kind, _ glyph: Int, _ muted: Bool, _ title: String, _ sub: String) -> Content {
+        let c = Content(kind: kind, title: title, sub: sub)
+        c.glyph = glyph
+        c.muted = muted
+        return c
+    }
+
     private static func rowSpecs() -> [(Content, Bool, Double)] {
         let thumb = sampleThumb()
         let text = L.zh ? "放心复制：让 Ctrl+C 也有看得见的成功" : "The quick brown fox jumps over the lazy dog"
@@ -105,6 +115,10 @@ enum Sheet {
             (Content(kind: .wifiUp, title: L.wifiNowBand("HomeNet", 5), sub: L.detail(L.signal(74), L.wifiWasBand(2))), false, 1.2),
             (Content(kind: .wifiUp, title: L.wifiReconnected("HomeNet"), sub: L.detail(L.band(2), L.signal(91), L.wifiOffline(6))), false, 1.2),
             (Content(kind: .wifiDown, title: L.wifiDisconnected, sub: L.wifiWasOn("CoffeeShop")), false, 1.2),
+            (audio(.audioWarn, 0, false, L.audioTitle("Speakers"), L.detail(L.audioVolume(64), L.audioWas("Headphones"), "Realtek(R) Audio")), false, 1.2),
+            (audio(.audio, 1, false, L.audioTitle("Headphones"), L.detail(L.audioVolume(40), L.audioWas("Speakers"), "WH-1000XM4")), false, 1.2),
+            (audio(.audio, 0, true, L.audioTitle("Speakers"), L.detail(L.audioMuted, L.audioWas("Headphones"), "Realtek(R) Audio")), false, 1.2),
+            (audio(.audioWarn, 2, false, L.audioNone, L.audioWas("Headphones")), false, 1.2),
         ]
     }
 }

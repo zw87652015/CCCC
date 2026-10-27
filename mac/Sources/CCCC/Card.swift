@@ -1,8 +1,8 @@
 import AppKit
 import CoreText
 
-enum Kind { case copied, cut, info, fail, empty, caps, wifiUp, wifiDown }
-enum Role { case main, caps, wifi }
+enum Kind { case copied, cut, info, fail, empty, caps, wifiUp, wifiDown, audio, audioWarn }
+enum Role { case main, caps, wifi, audio }
 
 final class Content {
     var kind: Kind
@@ -16,6 +16,8 @@ final class Content {
     var srcIcon: CGImage?
     var srcText = ""
     var srcLine = false
+    var glyph = 0      // audio card: 0 speaker, 1 headphones, 2 no output
+    var muted = false
 
     init(kind: Kind = .copied, title: String = "", meta: String = "", sub: String = "", count: Int = 1) {
         self.kind = kind; self.title = title; self.meta = meta; self.sub = sub; self.count = count
@@ -92,6 +94,20 @@ final class Card {
     private var cardH: CGFloat { cur?.srcLine == true ? hMax : H }
     private var cardTop: CGFloat { Card.CY + hMax - cardH }
 
+    // Wi-Fi and sound output cards sit under the menu bar and are never moved by the pointer.
+    private var tray: Bool { role == .wifi || role == .audio }
+    private var stayUntilClicked: Bool {
+        role == .wifi ? Prefs.wifiStayUntilClicked : role == .audio ? Prefs.audioStayUntilClicked
+            : caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked
+    }
+    private var shownMs: Int {
+        role == .wifi ? Prefs.wifiDurationMs : role == .audio ? Prefs.audioDurationMs : caps ? Prefs.capsDurationMs : Prefs.durationMs
+    }
+
+    // Cards that are on screen, in the order they appeared. Overlapping ones are pushed apart (see arrange).
+    private static var shownCards: [Card] = []
+    private var stackDY: CGFloat = 0, stackTarget: CGFloat = 0
+
     var now: Double { ProcessInfo.processInfo.systemUptime }
 
     init(defaults: Bool = false, role: Role = .main) {
@@ -141,7 +157,7 @@ final class Card {
                 W = (320 * (0.5 + 0.5 * k)).rounded()
                 H = max(64, 25 + 39 * k)
                 line = 18 * k
-                hMax = role == .wifi ? H : H + line
+                hMax = tray ? H : H + line
             }
             canvasW = W + 2 * Card.CX
             canvasH = hMax + Card.CY + 32
@@ -279,7 +295,10 @@ final class Card {
     func show(_ c: Content, repeat rep: Bool) {
         let t = now
         let fresh = !shown
-        if fresh || placeSig != placeSignature() { prepare() }
+        // A pointer-placed card that is already up moves to where the pointer is now, without gliding.
+        let follow = !fresh && !tray && pos == 9
+        let moved = fresh || follow || placeSig != placeSignature()
+        if moved { prepare() }
         let oldTitle = cur?.title
         cur = c
         repeatHit = rep
@@ -292,12 +311,19 @@ final class Card {
         }
         if c.kind == .fail { tShake = t }
         let info = c.kind == .info || c.kind == .empty
-        duration = Double(role == .wifi ? Prefs.wifiDurationMs : caps ? Prefs.capsDurationMs : Prefs.durationMs + (info ? 700 : 0)) / 1000
-        deadline = (role == .wifi ? Prefs.wifiStayUntilClicked : caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) ? .infinity : t + duration
+        duration = Double(shownMs + (info && !tray && !caps ? 700 : 0)) / 1000
+        deadline = stayUntilClicked ? .infinity : t + duration
         visTarget = 1
 
-        if !fresh { return }
+        if !fresh {
+            Card.arrange()
+            if follow { stackDY = stackTarget }
+            return
+        }
         vis = 0; last = t; shown = true
+        Card.shownCards.append(self)
+        Card.arrange()
+        stackDY = stackTarget   // a new card appears already at its stacked spot
         hoverArmed = !cursorInCard()
         frame()
         panel.orderFrontRegardless()
@@ -319,7 +345,7 @@ final class Card {
     private var pos: Int { caps && Prefs.capsPosition >= 0 ? Prefs.capsPosition : Prefs.position }
 
     private func placeSignature() -> String {
-        if role == .wifi {
+        if tray {
             return "W|\(wifiAnchor()?.x ?? -1)|\(Prefs.scale)|\(Prefs.textScale)|\(Prefs.fontFamily ?? "")|\(Prefs.simple)"
         }
         let s = "\(Prefs.position)|\(Prefs.scale)|\(Prefs.textScale)|\(Prefs.fontFamily ?? "")|\(Prefs.simple)"
@@ -329,7 +355,7 @@ final class Card {
     private func prepare() {
         placeSig = placeSignature()
         apply()
-        if role == .wifi {
+        if tray {
             // Under Control Center on the menu-bar screen; top-right when it can't be found.
             let vf = NSScreen.screens[0].visibleFrame
             let margin = Card.edge * sc
@@ -370,8 +396,37 @@ final class Card {
     }
 
     private func cursorInCard() -> Bool {
-        let r = CGRect(x: baseX + Card.CX * sc, y: baseY + (canvasH - Card.CY - hMax) * sc, width: W * sc, height: cardH * sc)
+        let r = CGRect(x: baseX + Card.CX * sc, y: baseY + (canvasH - Card.CY - hMax) * sc + stackDY, width: W * sc, height: cardH * sc)
         return r.contains(NSEvent.mouseLocation)
+    }
+
+    // Pushes overlapping cards apart with an 8 pt gap: each card moves up, or down when the card it
+    // lands on slides down (top-of-screen cards). A card that would leave its screen stays home.
+    private static func arrange() {
+        var placed: [(rect: CGRect, down: Bool)] = []
+        for c in shownCards {
+            let home = CGRect(x: c.baseX + Card.CX * c.sc, y: c.baseY + (c.canvasH - Card.CY - c.hMax) * c.sc,
+                              width: c.W * c.sc, height: c.cardH * c.sc)
+            let gap = 8 * c.sc
+            var r = home
+            var pushed = true
+            var rounds = 0
+            while pushed && rounds <= placed.count {
+                pushed = false
+                rounds += 1
+                for p in placed where r.insetBy(dx: 0, dy: -gap).intersects(p.rect) {
+                    r.origin.y = p.down ? p.rect.minY - gap - r.height : p.rect.maxY + gap
+                    pushed = true
+                    break
+                }
+            }
+            let mid = CGPoint(x: home.midX, y: home.midY)
+            let screen = NSScreen.screens.first(where: { $0.frame.contains(mid) }) ?? NSScreen.main
+            let work = screen?.visibleFrame ?? home
+            if !work.contains(r) { r = home }
+            c.stackTarget = r.minY - home.minY
+            placed.append((rect: r, down: c.slideDown))
+        }
     }
 
     private func frame() {
@@ -391,6 +446,10 @@ final class Card {
         layoutGlass(t)
         view.needsDisplay = true
 
+        if stackDY != stackTarget {
+            stackDY += (stackTarget - stackDY) * CGFloat(1 - exp(-dt * 14))
+            if abs(stackTarget - stackDY) < 0.5 { stackDY = stackTarget }
+        }
         let dy = CGFloat((1 - Ease.outQuint(vis)) * 18) * (slideDown ? -1 : 1)
         var dx: CGFloat = 0
         let ts = t - tShake
@@ -398,7 +457,7 @@ final class Card {
             let u = ts / 0.5
             dx = CGFloat(7 * sin(u * .pi * 7) * (1 - u) * (1 - u))
         }
-        panel.setFrameOrigin(NSPoint(x: baseX + dx, y: baseY - dy))
+        panel.setFrameOrigin(NSPoint(x: baseX + dx, y: baseY - dy + stackDY))
         panel.alphaValue = CGFloat(Ease.outCubic(min(1, vis * 1.5))) * CGFloat(100 - Prefs.transparency) / 100
     }
 
@@ -407,12 +466,18 @@ final class Card {
         timer = nil
         panel.orderOut(nil)
         shown = false
+        if let i = Card.shownCards.firstIndex(where: { $0 === self }) {
+            Card.shownCards.remove(at: i)
+            stackDY = 0
+            stackTarget = 0
+            Card.arrange()   // the cards left behind glide back to their spots
+        }
     }
 
     func render(_ ctx: CGContext, now t: Double) {
         guard let c = cur else { return }
 
-        let warn = c.kind == .fail || c.kind == .empty || c.kind == .wifiDown
+        let warn = c.kind == .fail || c.kind == .empty || c.kind == .wifiDown || c.kind == .audioWarn
         let accent = c.kind == .caps ? (c.capsOn ? th.ok : th.meta) : (warn ? th.warn : th.ok)
         let te = t - tEvent
         let m = ctx.userSpaceToDeviceSpaceTransform
@@ -469,7 +534,7 @@ final class Card {
         }
 
         let remain = Ease.clamp01((deadline - t) / duration)
-        if visTarget > 0 && remain > 0 && !(role == .wifi ? Prefs.wifiStayUntilClicked : caps ? Prefs.capsStayUntilClicked : Prefs.stayUntilClicked) {
+        if visTarget > 0 && remain > 0 && !stayUntilClicked {
             let x0 = Card.CX + rad, x1 = Card.CX + W - rad, y = cardTop + cardH - 3
             ctx.setStrokeColor(accent.withAlphaComponent(th.dark ? 70 / 255 : 60 / 255).cgColor)
             ctx.setLineWidth(2)
@@ -569,6 +634,68 @@ final class Card {
             }
             if cur?.kind == .wifiDown && a4 > 0 {
                 strokePartial(ctx, [CGPoint(x: ix - 8.5 * k, y: iy + 11 * k), CGPoint(x: ix + 8.5 * k, y: iy - 9 * k)], a4)
+            }
+            return
+        }
+        if cur?.kind == .audio || cur?.kind == .audioWarn {
+            // Sound output glyph: speaker with waves, headphones, or a slashed speaker for no output;
+            // the waves turn into an × while the output is muted.
+            let a1 = Ease.clamp01(pc / 0.4), a2 = Ease.clamp01((pc - 0.3) / 0.4)
+            let a3 = Ease.clamp01((pc - 0.55) / 0.3), a4 = Ease.clamp01((pc - 0.7) / 0.3)
+            ctx.setStrokeColor(glyph)
+            ctx.setFillColor(glyph)
+            ctx.setLineWidth(2.3)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            if cur?.glyph == 1 {
+                if a1 > 0 {
+                    ctx.beginPath()
+                    ctx.addArc(center: CGPoint(x: ix, y: iy + 0.5 * k), radius: 9 * k,
+                               startAngle: .pi, endAngle: .pi + .pi * CGFloat(a1), clockwise: false)
+                    ctx.strokePath()
+                }
+                if a2 > 0 {
+                    ctx.setAlpha(CGFloat(a2))
+                    ctx.addPath(Shapes.roundRect(CGRect(x: ix - 9.5 * k, y: iy - 0.5 * k, width: 5.5 * k, height: 8 * k), 2.5 * k))
+                    ctx.addPath(Shapes.roundRect(CGRect(x: ix + 4 * k, y: iy - 0.5 * k, width: 5.5 * k, height: 8 * k), 2.5 * k))
+                    ctx.fillPath()
+                    ctx.setAlpha(1)
+                }
+                return
+            }
+            if a1 > 0 {
+                ctx.setAlpha(CGFloat(a1))
+                ctx.addRect(CGRect(x: ix - 9 * k, y: iy - 3 * k, width: 4 * k, height: 6 * k))
+                ctx.move(to: CGPoint(x: ix - 5 * k, y: iy - 3 * k))
+                ctx.addLine(to: CGPoint(x: ix - 0.5 * k, y: iy - 7 * k))
+                ctx.addLine(to: CGPoint(x: ix - 0.5 * k, y: iy + 7 * k))
+                ctx.addLine(to: CGPoint(x: ix - 5 * k, y: iy + 3 * k))
+                ctx.closePath()
+                ctx.fillPath()
+                ctx.setAlpha(1)
+            }
+            if cur?.glyph == 2 {
+                if a4 > 0 { strokePartial(ctx, [CGPoint(x: ix - 8.5 * k, y: iy + 11 * k), CGPoint(x: ix + 8.5 * k, y: iy - 9 * k)], a4) }
+                return
+            }
+            if cur?.muted == true {
+                if a2 > 0 {
+                    strokePartial(ctx, [CGPoint(x: ix + 4 * k, y: iy - 4 * k), CGPoint(x: ix + 11 * k, y: iy + 4 * k)], a2)
+                    strokePartial(ctx, [CGPoint(x: ix + 4 * k, y: iy + 4 * k), CGPoint(x: ix + 11 * k, y: iy - 4 * k)], a2)
+                }
+                return
+            }
+            if a2 > 0 {
+                ctx.beginPath()
+                ctx.addArc(center: CGPoint(x: ix - k, y: iy), radius: 5.5 * k,
+                           startAngle: CGFloat(-52 * Double.pi / 180), endAngle: CGFloat((-52 + 104 * a2) * Double.pi / 180), clockwise: false)
+                ctx.strokePath()
+            }
+            if a3 > 0 {
+                ctx.beginPath()
+                ctx.addArc(center: CGPoint(x: ix - k, y: iy), radius: 9.5 * k,
+                           startAngle: CGFloat(-52 * Double.pi / 180), endAngle: CGFloat((-52 + 104 * a3) * Double.pi / 180), clockwise: false)
+                ctx.strokePath()
             }
             return
         }

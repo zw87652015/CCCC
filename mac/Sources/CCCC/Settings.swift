@@ -1,6 +1,10 @@
 import AppKit
 import ServiceManagement
 
+struct SettingsFileError: LocalizedError {
+    var errorDescription: String? { "Not a CCCC settings file." }
+}
+
 enum Prefs {
     private static let d = UserDefaults.standard
 
@@ -108,6 +112,18 @@ enum Prefs {
         get { d.bool(forKey: "WifiStayUntilClicked") }
         set { d.set(newValue, forKey: "WifiStayUntilClicked") }
     }
+    static var audioHint: Bool {
+        get { (d.object(forKey: "AudioHint") as? Bool) ?? true }
+        set { d.set(newValue, forKey: "AudioHint") }
+    }
+    static var audioDurationMs: Int {
+        get { range("AudioDurationMs", 4000, 500, 10000) }
+        set { d.set(newValue, forKey: "AudioDurationMs") }
+    }
+    static var audioStayUntilClicked: Bool {
+        get { d.bool(forKey: "AudioStayUntilClicked") }
+        set { d.set(newValue, forKey: "AudioStayUntilClicked") }
+    }
     static var position: Int {
         get { range("Position", 6, 0, 10) }
         set { d.set(newValue, forKey: "Position") }
@@ -170,10 +186,76 @@ enum Prefs {
         durationMs = 1900; stayUntilClicked = false; position = 6; scale = 100; textScale = 100
         capsDurationMs = 2600; capsStayUntilClicked = false
         wifiDurationMs = 4000; wifiStayUntilClicked = false
+        audioDurationMs = 4000; audioStayUntilClicked = false
         transparency = 0; simple = false
         fontFamily = nil; soundOkFile = nil; soundFailFile = nil
         showSource = true; sourceWhen = 1; sourceDetail = 1
         capsPosition = -1; capsWidth = 200; capsHeight = 40
+    }
+
+    // Settings files: the same envelope and key names as the Windows app. Paused stays per machine.
+    private enum Field { case flag, number, text, list }
+    private static let portable: [(String, Field)] = [
+        ("Sound", .flag), ("FailHint", .flag), ("CapsHint", .flag), ("AutoUpdate", .flag), ("ShowSource", .flag),
+        ("Simple", .flag), ("FullPalette", .flag), ("StayUntilClicked", .flag), ("CapsStayUntilClicked", .flag),
+        ("WifiHint", .flag), ("WifiStayUntilClicked", .flag), ("AudioHint", .flag), ("AudioStayUntilClicked", .flag),
+        ("SourceWhen", .number), ("SourceDetail", .number), ("ThemeMode", .number), ("Palette", .number),
+        ("DurationMs", .number), ("CapsDurationMs", .number), ("WifiDurationMs", .number), ("AudioDurationMs", .number),
+        ("Position", .number), ("Scale", .number), ("TextScale", .number), ("Transparency", .number),
+        ("CapsPosition", .number), ("CapsWidth", .number), ("CapsHeight", .number),
+        ("OkColor", .text), ("WarnColor", .text), ("BgColor", .text), ("BorderColor", .text), ("TitleColor", .text),
+        ("SubColor", .text), ("MetaColor", .text), ("FontFamily", .text), ("SoundOkFile", .text), ("SoundFailFile", .text),
+        ("Lang", .text), ("IgnoreApps", .list),
+    ]
+
+    static func settingsData() throws -> Data {
+        var values: [String: Any] = [:]
+        for (key, field) in portable {
+            guard let raw = d.object(forKey: key) else { continue }
+            switch field {
+            case .flag: values[key] = (raw as? Bool) ?? false
+            case .number: values[key] = (raw as? Int) ?? 0
+            case .text: if let s = raw as? String { values[key] = s }
+            case .list: values[key] = (raw as? [String]) ?? []
+            }
+        }
+        let doc: [String: Any] = ["format": "cccc-settings", "version": 1, "settings": values]
+        return try JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys])
+    }
+
+    // Writes the file's values; a missing or mistyped value is removed so the default applies.
+    // Out-of-range numbers and bad colours are stored as written and corrected by the getters above.
+    static func importSettings(_ data: Data) throws {
+        guard data.count <= 1 << 20,
+              let doc = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              doc["format"] as? String == "cccc-settings",
+              jsonNumber(doc["version"])?.intValue == 1,
+              let values = doc["settings"] as? [String: Any] else { throw SettingsFileError() }
+        for (key, field) in portable {
+            let v = values[key]
+            switch field {
+            case .flag:
+                if let b = jsonFlag(v) { d.set(b, forKey: key) } else { d.removeObject(forKey: key) }
+            case .number:
+                if let n = jsonNumber(v) { d.set(n.intValue, forKey: key) } else { d.removeObject(forKey: key) }
+            case .text:
+                if let s = v as? String, !s.isEmpty { d.set(s, forKey: key) } else { d.removeObject(forKey: key) }
+            case .list:
+                let items = ((v as? [Any]) ?? []).compactMap { $0 as? String }
+                if items.isEmpty { d.removeObject(forKey: key) } else { d.set(items, forKey: key) }
+            }
+        }
+    }
+
+    // JSON numbers are NSNumbers; booleans are too, so they are told apart by their CF type.
+    private static func jsonNumber(_ v: Any?) -> NSNumber? {
+        guard let n = v as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() else { return nil }
+        return n
+    }
+
+    private static func jsonFlag(_ v: Any?) -> Bool? {
+        if let n = v as? NSNumber, CFGetTypeID(n) == CFBooleanGetTypeID() { return n.boolValue }
+        return jsonNumber(v).map { $0.intValue != 0 }
     }
 
     private static func range(_ key: String, _ fallback: Int, _ lo: Int, _ hi: Int) -> Int {

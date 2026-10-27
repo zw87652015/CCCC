@@ -93,6 +93,22 @@ enum L {
     static var wifiNoAdapter: String { t("No Wi-Fi adapter", "没有 Wi-Fi 适配器") }
     static var wifiOpenLocation: String { t("Open Location settings", "打开定位设置") }
 
+    // Sound output card. Details are joined with " · " and each shows only when known.
+    static func audioTitle(_ name: String) -> String { t("Sound output: " + name, "声音输出：" + name) }
+    static var audioNone: String { t("No sound output", "没有声音输出设备") }
+    static func audioVolume(_ n: Int) -> String { t("Volume \(n)%", "音量 \(n)%") }
+    static var audioMuted: String { t("Muted", "已静音") }
+    static func audioWas(_ name: String) -> String { t("Was " + name, "原为 " + name) }
+    static var menuAudio: String { t("Show sound output changes", "声音输出切换时提醒我") }
+    static var tabAudio: String { t("Sound output", "声音输出") }
+
+    static var settingsFile: String { t("Settings file", "设置文件") }
+    static var hintSettingsFile: String { t("Export your settings to a file, or import a file from another computer. Pause stays as it is.", "把设置导出为文件，或导入另一台电脑导出的文件。暂停状态保持不变。") }
+    static var exportSettings: String { t("Export…", "导出…") }
+    static var importSettings: String { t("Import…", "导入…") }
+    static var importFailed: String { t("Couldn't import this file.", "无法导入此文件。") }
+    static var exportFailed: String { t("Couldn't export settings.", "无法导出设置。") }
+
     static var menuShow: String { t("Show clipboard", "查看剪贴板") }
     static var menuPause: String { t("Pause", "暂停") }
     static var menuSound: String { t("Sound", "提示音") }

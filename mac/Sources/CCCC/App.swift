@@ -58,10 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let capsCard = Card(role: .caps)
     private let wifiCard = Card(role: .wifi)
     private let wifi = WifiWatch()
+    private let audioCard = Card(role: .audio)
+    private let audio = AudioWatch()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private let trayIcon = Icons.trayTemplate()
-    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miStopSounds: NSMenuItem!, miHint: NSMenuItem!, miCaps: NSMenuItem!, miWifi: NSMenuItem!
+    private var miShow: NSMenuItem!, miPause: NSMenuItem!, miSound: NSMenuItem!, miStopSounds: NSMenuItem!, miHint: NSMenuItem!, miCaps: NSMenuItem!, miWifi: NSMenuItem!, miAudio: NSMenuItem!
     private var miSource: NSMenuItem!, miSourceOn: NSMenuItem!, miWhen: NSMenuItem!, miWhenAlways: NSMenuItem!
     private var miWhenAuto: NSMenuItem!, miDetail: NSMenuItem!, miDetails: [NSMenuItem] = []
     private var miInput: NSMenuItem!, miStartup: NSMenuItem!, miAutoUpdate: NSMenuItem!
@@ -111,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         wifi.changed = { [weak self] ch in self?.onWifi(ch) }
         wifi.onNamesAllowed = { [weak self] in self?.customize?.reload() }
+        audio.changed = { [weak self] ch in self?.onAudio(ch) }
         sync()
 
         DistributedNotificationCenter.default().addObserver(forName: NSNotification.Name(helloNotification), object: nil, queue: .main) { [weak self] _ in
@@ -119,9 +122,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             self?.wifi.suspend()
+            self?.audio.suspend()
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.wifi.resume()
+            self?.audio.resume()
         }
 
         if !Prefs.askedInputMonitoring {
@@ -176,6 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miHint = item(#selector(toggleHint))
         miCaps = item(#selector(toggleCaps))
         miWifi = item(#selector(toggleWifi))
+        miAudio = item(#selector(toggleAudio))
         miSourceOn = item(#selector(toggleSource))
         miWhen = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         miWhen.isEnabled = false
@@ -214,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miUpdate = item(#selector(checkUpdateAction))
         miQuit = item(#selector(quitAction))
 
-        for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
+        for entry in [miShow, nil, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miAudio, miSource, miInput, miStartup, miAutoUpdate, miLang, nil, miCustomize, miUpdate, nil, miQuit] {
             menu.addItem(entry ?? .separator())
         }
         menu.delegate = self
@@ -236,8 +242,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         card.apply()
         capsCard.apply()
         wifiCard.apply()
+        audioCard.apply()
         if Prefs.wifiHint { wifi.start() } else { wifi.stop() }
+        if Prefs.audioHint { audio.start() } else { audio.stop() }
         customize?.reload()
+        miAudio.title = L.menuAudio
         miShow.title = L.menuShow
         miPause.title = L.menuPause
         miSound.title = L.menuSound
@@ -265,6 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         miHint.state = Prefs.failHint ? .on : .off
         miCaps.state = Prefs.capsHint ? .on : .off
         miWifi.state = Prefs.wifiHint ? .on : .off
+        miAudio.state = Prefs.audioHint ? .on : .off
         miSourceOn.state = Prefs.showSource ? .on : .off
         miWhenAlways.state = Prefs.sourceWhen == 0 ? .on : .off
         miWhenAuto.state = Prefs.sourceWhen == 1 ? .on : .off
@@ -327,6 +337,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sync()
     }
 
+    @objc private func toggleAudio() {
+        Prefs.audioHint.toggle()
+        sync()
+    }
+
     @objc private func requestInputAction() { requestInputMonitoring() }
 
     private func requestInputMonitoring() {
@@ -386,6 +401,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 onShowCaps: { [weak self] in self?.showCapsSample() },
                 onShowWifi: { [weak self] in self?.showWifiSample() },
                 wifi: wifi,
+                onShowAudio: { [weak self] in self?.showAudioSample() },
+                audio: audio,
                 onTest: { [weak self] ok in
                     if ok { self?.sounds.playOk() } else { self?.sounds.playNo() }
                 },
@@ -460,10 +477,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         present(c, repeat: false)
     }
 
+    // The preview shows the real current output, not fake data.
+    private func showAudioSample() {
+        present(audioContent(audio.current(), preview: true), repeat: false)
+    }
+
+    // Shared by the real switch and the preview: the previous output is named only for a real switch.
+    private func audioContent(_ ch: AudioWatch.Change, preview: Bool) -> Content {
+        if ch.none {
+            let none = Content(kind: .audioWarn, title: L.audioNone, sub: !preview && ch.prevName != nil ? L.audioWas(ch.prevName!) : "")
+            none.glyph = 2
+            return none
+        }
+        var prevLabel: String?
+        if !preview, let prev = ch.prevName {
+            prevLabel = prev == ch.name ? (ch.prevDevice ?? prev) : prev
+        }
+        let c = Content(kind: !ch.personal && !ch.muted && ch.volume != 0 && ch.prevPersonal ? .audioWarn : .audio,
+                        title: L.audioTitle(ch.name ?? ""),
+                        sub: L.detail(ch.muted ? L.audioMuted : ch.volume >= 0 ? L.audioVolume(ch.volume) : nil,
+                                      prevLabel.map { L.audioWas($0) }, ch.device))
+        c.glyph = ch.personal ? 1 : 0
+        c.muted = ch.muted
+        return c
+    }
+
+    private func onAudio(_ ch: AudioWatch.Change) {
+        guard Prefs.audioHint, !Prefs.paused, !userBusy() else { return }
+        present(audioContent(ch, preview: false), repeat: false)
+    }
+
     @objc private func checkUpdateAction() { checkUpdate(manual: true) }
 
     @objc private func stopSoundsAction() { sounds.stopAll() }
-    @objc private func quitAction() { sounds.stopAll(); wifi.stop(); NSApp.terminate(nil) }
+    @objc private func quitAction() { sounds.stopAll(); wifi.stop(); audio.stop(); NSApp.terminate(nil) }
 
     // MARK: Keyboard (listen-only event tap; records only that a copy/cut chord happened, plus Caps Lock state)
 
@@ -660,7 +707,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func present(_ c: Content, repeat rep: Bool) {
         dbg("card: kind=\(c.kind) title=\"\(c.title)\" meta=\"\(c.meta)\" sub=\"\(c.sub)\" count=\(c.count) repeat=\(rep)")
-        (c.kind == .caps ? capsCard : c.kind == .wifiUp || c.kind == .wifiDown ? wifiCard : card).show(c, repeat: rep)
+        (c.kind == .caps ? capsCard : c.kind == .wifiUp || c.kind == .wifiDown ? wifiCard
+            : c.kind == .audio || c.kind == .audioWarn ? audioCard : card).show(c, repeat: rep)
     }
 
     // MARK: Updates
