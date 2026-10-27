@@ -25,6 +25,7 @@ final class AudioWatch {
         var volume: Int
     }
 
+    private static let system = AudioObjectID(kAudioObjectSystemObject)
     private let debounceSeconds = 0.7
     private let quietSeconds = 10.0
     private let hdpnSource: UInt32 = 0x6864_706E   // 'hdpn' (headphones data source)
@@ -44,7 +45,7 @@ final class AudioWatch {
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.defaultChanged() }
         defaultBlock = block
         var a = AudioWatch.address(kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal)
-        _ = AudioObjectAddPropertyListenerBlock(kAudioObjectSystemObject, &a, DispatchQueue.main, block)
+        _ = AudioObjectAddPropertyListenerBlock(AudioWatch.system, &a, DispatchQueue.main, block)
         last = read()
         listen(to: currentDevice())
         dbg("audio: watching (output=\(last?.name ?? "none"))")
@@ -56,7 +57,7 @@ final class AudioWatch {
         debounce?.invalidate()
         if let block = defaultBlock {
             var a = AudioWatch.address(kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal)
-            _ = AudioObjectRemovePropertyListenerBlock(kAudioObjectSystemObject, &a, DispatchQueue.main, block)
+            _ = AudioObjectRemovePropertyListenerBlock(AudioWatch.system, &a, DispatchQueue.main, block)
         }
         listen(to: 0)
     }
@@ -168,7 +169,7 @@ final class AudioWatch {
         var a = AudioWatch.address(kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal)
         var dev: AudioObjectID = 0
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        guard AudioObjectGetPropertyData(kAudioObjectSystemObject, &a, 0, nil, &size, &dev) == noErr else { return 0 }
+        guard AudioObjectGetPropertyData(AudioWatch.system, &a, 0, nil, &size, &dev) == noErr else { return 0 }
         return dev
     }
 
