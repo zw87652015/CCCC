@@ -624,6 +624,7 @@
         <RadioButton x:Name="navSource" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
         <RadioButton x:Name="navCaps" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
         <RadioButton x:Name="navWifi" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
+        <RadioButton x:Name="navAudio" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
         <RadioButton x:Name="navAbout" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
       </StackPanel>
       <Button x:Name="btnReset" DockPanel.Dock="Bottom" Style="{StaticResource Link}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14,0,0,4"/>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -9,8 +10,8 @@ using System.Windows.Forms;
 
 namespace Cccc
 {
-    enum Kind { Copied, Cut, Info, Fail, Empty, Caps, WifiUp, WifiDown }
-    enum Role { Main, Caps, Wifi }
+    enum Kind { Copied, Cut, Info, Fail, Empty, Caps, WifiUp, WifiDown, Audio, AudioWarn }
+    enum Role { Main, Caps, Wifi, Audio }
 
     sealed class Content
     {
@@ -18,7 +19,8 @@ namespace Cccc
         public string Title = "", Meta = "", Sub = "";
         public string Sig, Hold;
         public Bitmap Thumb;
-        public bool CutHint, Secret, SrcLine, CapsOn;
+        public bool CutHint, Secret, SrcLine, CapsOn, Muted;
+        public int Glyph;   // audio card: 0 speaker, 1 headphones, 2 no output
         public int Count = 1;
         public string Site;
         public Bitmap SrcIcon;
@@ -50,10 +52,13 @@ namespace Cccc
 
         Surface surf;
         Bitmap shadow;
-        int[] shadowPx;
+        int[] shadowPx, plainShadow;
         float shadowH;
         float[][] backdrop;
-        double lastCapture;
+        bool glassDirty;
+        float[][] glideStrip;
+        int glideStripTop;
+        double stripTarget = double.NaN, lastCapture;
         Theme th = Theme.DarkTheme, shadowTheme;
         Content cur;
         bool shown, repeatHit, hoverArmed;
@@ -64,11 +69,19 @@ namespace Cccc
         Point dragStart;
         int dragOffX, dragOffY;
 
+        // The tray-anchored cards stack so simultaneous ones never overlap: `stack` holds
+        // every visible card in show order, `stackDY` is this card's animated vertical offset
+        // from its home spot (device px), `stackTarget` where Arrange wants it.
+        static readonly List<Card> stack = new List<Card>();
+        double stackDY, stackTarget;
+
         // Raised when the user drags a Freedom card to a new spot (0-1000 within the work area).
         public event Action<int, int> Moved;
 
-        // The network name the Wi-Fi card should anchor to (its tray button's name contains it).
-        public string WifiAnchorName;
+        // The name the tray-anchored card should anchor to (its tray button's name contains it).
+        public string AnchorName;
+
+        bool Tray { get { return role == Role.Wifi || role == Role.Audio; } }
 
         public Card(Role role = Role.Main)
         {
@@ -100,7 +113,7 @@ namespace Cccc
         {
             if (m.Msg == Native.WM_APP_FRAME) { vsync.Done(); if (shown) Frame(); return; }
             if (m.Msg == Native.WM_MOUSEACTIVATE) { m.Result = (IntPtr)Native.MA_NOACTIVATE; return; }
-            if (role != Role.Wifi && Pos == 10 && shown)
+            if (!Tray && Pos == 10 && shown)
             {
                 if (m.Msg == Native.WM_LBUTTONDOWN) { BeginDrag(); return; }
                 if (m.Msg == Native.WM_MOUSEMOVE && drag) { DragMove(); return; }
@@ -112,6 +125,8 @@ namespace Cccc
 
         void BeginDrag()
         {
+            baseY += (int)Math.Round(stackDY);
+            stackDY = stackTarget = 0;
             Native.POINT p;
             Native.GetCursorPos(out p);
             drag = true;
@@ -138,6 +153,7 @@ namespace Cccc
             int moved = Math.Abs(p.X - dragStart.X) + Math.Abs(p.Y - dragStart.Y);
             Native.ReleaseCapture();
             drag = false;
+            Arrange();
             if (th.Glass) CaptureBackdrop();
             if (moved > 4)
             {
@@ -198,7 +214,7 @@ namespace Cccc
                     W = (float)Math.Round(320 * (0.5 + 0.5 * k));
                     H = Math.Max(64, 25 + 39 * k);
                     Line = 18 * k;
-                    HMax = role == Role.Wifi ? H : H + Line;
+                    HMax = Tray ? H : H + Line;
                 }
                 CanvasW = W + 2 * CX;
                 CanvasH = HMax + CY + 32;
@@ -252,7 +268,7 @@ namespace Cccc
             double now = Now;
             bool fresh = !shown;
             if (fresh || placeSig != PlaceSig()) Prepare();
-            if (th.Glass) CaptureBackdrop();
+            if (!fresh && th.Glass) CaptureBackdrop();
 
             string oldTitle = cur != null ? cur.Title : null;
             if (cur != null && cur.Thumb != null && cur.Thumb != c.Thumb) cur.Thumb.Dispose();
@@ -263,12 +279,18 @@ namespace Cccc
             else tText = now;
             if (c.Kind == Kind.Fail) tShake = now;
             bool info = c.Kind == Kind.Info || c.Kind == Kind.Empty;
-            duration = role == Role.Wifi ? st.WifiDurationMs / 1000.0 : caps ? st.CapsDurationMs / 1000.0 : (st.DurationMs + (info ? 700 : 0)) / 1000.0;
-            deadline = (role == Role.Wifi ? st.WifiStayUntilClicked : caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : now + duration;
+            duration = role == Role.Wifi ? st.WifiDurationMs / 1000.0 : role == Role.Audio ? st.AudioDurationMs / 1000.0
+                : caps ? st.CapsDurationMs / 1000.0 : (st.DurationMs + (info ? 700 : 0)) / 1000.0;
+            deadline = (role == Role.Wifi ? st.WifiStayUntilClicked : role == Role.Audio ? st.AudioStayUntilClicked
+                : caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : now + duration;
             visTarget = 1;
 
-            if (!fresh) return;
+            if (!fresh) { Arrange(); return; }
             vis = 0; last = now; shown = true;
+            stack.Add(this);
+            Arrange();
+            stackDY = stackTarget;   // a fresh card appears already stacked — no glide-in
+            if (th.Glass) CaptureBackdrop();   // at the stacked spot, not the home one
             hoverArmed = !CursorInCard();
             Frame();
             Native.ShowWindow(Handle, Native.SW_SHOWNOACTIVATE);
@@ -278,8 +300,8 @@ namespace Cccc
 
         string PlaceSig()
         {
-            if (role == Role.Wifi)
-                return "W|" + Anchor.Sig + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple + "|" + WifiAnchorName;
+            if (Tray)
+                return "W|" + Anchor.Sig + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple + "|" + AnchorName;
             return Pos + "|" + FreeX + "|" + FreeY + "|" + st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple
                 + (caps ? "|" + st.CapsPosition + "|" + st.CapsFreeX + "|" + st.CapsFreeY + "|" + st.CapsWidth + "|" + st.CapsHeight : "");
         }
@@ -289,10 +311,10 @@ namespace Cccc
             Rectangle work = Rectangle.Empty;
             Point cursor = Point.Empty;
             int pos = 0;
-            if (role == Role.Wifi)
+            if (Tray)
             {
                 float ds;
-                wifiSpot = Anchor.Wifi(WifiAnchorName, out ds);
+                wifiSpot = Anchor.Tray(AnchorName, out ds);
                 DpiScale = ds;
             }
             else
@@ -317,7 +339,7 @@ namespace Cccc
             Layout(DpiScale * st.Scale / 100f, resolved);
 
             Point p;
-            if (role == Role.Wifi)
+            if (Tray)
             {
                 bool down;
                 p = Anchor.Place(wifiSpot, new Size(Px(W), Px(HMax)), Px(Edge), out down);
@@ -368,13 +390,58 @@ namespace Cccc
             if (!theme.Glass) backdrop = null;
             if (shadowTheme != theme || shadowH != CardH)
             {
-                if (shadow != null) shadow.Dispose();
                 var card = new RectangleF(CX, Top, W, CardH);
-                shadowPx = Alpha.Shadow(surf.W, surf.H, s, card, R, theme);
-                if (backdrop != null) shadowPx = GlassLayer.Compose(backdrop, shadowPx, surf.W, surf.H, s, card, R, theme);
-                shadow = Alpha.Write(shadowPx, surf.W, surf.H, PixelFormat.Format32bppPArgb);
+                plainShadow = Alpha.Shadow(surf.W, surf.H, s, card, R, theme);
                 shadowTheme = theme;
                 shadowH = CardH;
+                glassDirty = true;
+            }
+            if (glassDirty)
+            {
+                glassDirty = false;
+                var card = new RectangleF(CX, Top, W, CardH);
+                shadowPx = backdrop != null ? GlassLayer.Compose(backdrop, plainShadow, surf.W, surf.H, s, card, R, theme) : plainShadow;
+                if (shadow != null) shadow.Dispose();
+                shadow = Alpha.Write(shadowPx, surf.W, surf.H, PixelFormat.Format32bppPArgb);
+            }
+        }
+
+        // Every card nudged off its home spot by an already-shown one; the earliest card wins.
+        // `slideDown` cards (top taskbar) push newcomers below them, everyone else pushes up.
+        static void Arrange()
+        {
+            var placed = new List<Rectangle>();
+            foreach (Card c in stack)
+            {
+                int x = c.baseX + c.Px(CX), y0 = c.baseY + c.Px(c.Top);
+                int w = c.Px(c.W), h = c.Px(c.CardH), gap = c.Px(8);
+                var r = new Rectangle(x, y0, w, h);
+                if (c.drag) { placed.Add(r); continue; }
+
+                var hr = new Native.RECT { Left = x, Top = y0, Right = x + w, Bottom = y0 + h };
+                IntPtr mon = Native.MonitorFromRect(ref hr, 2);
+                var mi = new Native.MONITORINFO { cbSize = Marshal.SizeOf(typeof(Native.MONITORINFO)) };
+                Native.GetMonitorInfo(mon, ref mi);
+                var work = Rectangle.FromLTRB(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom);
+
+                // Move past the first blocking card, then re-test: chains push further still.
+                bool blocked = true;
+                int guard = 0;
+                while (blocked && guard++ < placed.Count + 1)
+                {
+                    blocked = false;
+                    for (int i = 0; i < placed.Count; i++)
+                    {
+                        var pr = placed[i];
+                        if (!Rectangle.Inflate(r, 0, gap).IntersectsWith(pr)) continue;
+                        r.Y = stack[i].slideDown ? pr.Bottom + gap : pr.Top - gap - h;
+                        blocked = true;
+                        break;
+                    }
+                }
+                if (!work.Contains(r)) r = new Rectangle(x, y0, w, h);   // would leave the monitor: stay home
+                c.stackTarget = r.Y - y0;
+                placed.Add(r);
             }
         }
 
@@ -382,9 +449,45 @@ namespace Cccc
         void CaptureBackdrop()
         {
             lastCapture = Now;
-            int[] px = Handle == IntPtr.Zero ? null : GlassLayer.Capture(shown ? Handle : IntPtr.Zero, baseX, baseY, surf.W, surf.H);
+            int[] px = Handle == IntPtr.Zero ? null : GlassLayer.Capture(ShownHandles(), baseX, baseY + (int)Math.Round(stackDY), surf.W, surf.H);
             backdrop = px != null ? GlassLayer.Blur(px, surf.W, surf.H, s) : null;
-            shadowTheme = null;
+            glideStrip = null;
+            stripTarget = double.NaN;
+            glassDirty = true;
+        }
+
+        // Handles of every card currently on screen, so glass captures leave them all out.
+        static IntPtr[] ShownHandles()
+        {
+            var list = new List<IntPtr>(stack.Count);
+            foreach (Card c in stack) list.Add(c.Handle);
+            return list.ToArray();
+        }
+
+        // While the card glides between stack spots, the glass follows a single tall strip
+        // covering the whole travel range; each frame slices out the card-height piece at
+        // the current offset. On arrival the slice already matches the resting spot.
+        void GlideGlass()
+        {
+            if (stripTarget != stackTarget)
+            {
+                int a = (int)Math.Round(stackDY), b = (int)Math.Round(stackTarget);
+                glideStripTop = baseY + Math.Min(a, b);
+                int h = Math.Abs(b - a) + surf.H;
+                int[] px = GlassLayer.Capture(ShownHandles(), baseX, glideStripTop, surf.W, h);
+                glideStrip = px != null ? GlassLayer.Blur(px, surf.W, h, s) : null;
+                stripTarget = stackTarget;
+            }
+            if (glideStrip == null) return;
+            if (backdrop == null)
+            {
+                backdrop = new float[6][];
+                for (int k = 0; k < 6; k++) backdrop[k] = new float[surf.W * surf.H];
+            }
+            int off = baseY + (int)Math.Round(stackDY) - glideStripTop;
+            for (int k = 0; k < 6; k++) Array.Copy(glideStrip[k], off * surf.W, backdrop[k], 0, surf.W * surf.H);
+            glassDirty = true;
+            if (stackDY == stackTarget) { glideStrip = null; stripTarget = double.NaN; }
         }
 
         // For the design sheet: the `w`-pixel-wide image `px` stands in for the screen under a canvas at (x, y).
@@ -393,7 +496,7 @@ namespace Cccc
             var part = new int[surf.W * surf.H];
             for (int r = 0; r < surf.H; r++) Array.Copy(px, (y + r) * w + x, part, r * surf.W, surf.W);
             backdrop = GlassLayer.Blur(part, surf.W, surf.H, s);
-            shadowTheme = null;
+            glassDirty = true;
         }
 
         int Px(float dip) { return (int)Math.Round(dip * s); }
@@ -409,7 +512,7 @@ namespace Cccc
         {
             Native.POINT p;
             if (!Native.GetCursorPos(out p)) return false;
-            int x0 = baseX + Px(CX), y0 = baseY + Px(Top);
+            int x0 = baseX + Px(CX), y0 = baseY + Px(Top) + (int)Math.Round(stackDY);
             return p.X >= x0 && p.X < x0 + Px(W) && p.Y >= y0 && p.Y < y0 + Px(CardH);
         }
 
@@ -426,6 +529,13 @@ namespace Cccc
             vis = visTarget > vis ? Math.Min(1, vis + dt / 0.34) : Math.Max(0, vis - dt / 0.26);
             if (vis <= 0 && visTarget <= 0) { HideNow(); return; }
 
+            if (stackDY != stackTarget)
+            {
+                stackDY += (stackTarget - stackDY) * (1 - Math.Exp(-dt * 14));
+                if (Math.Abs(stackTarget - stackDY) < 0.5) stackDY = stackTarget;
+                if (th.Glass) GlideGlass();
+            }
+
             double dy = (1 - Ease.OutQuint(vis)) * 18, dx = 0, ts = now - tShake;
             if (slideDown) dy = -dy;
             if (ts >= 0 && ts < 0.5)
@@ -438,7 +548,7 @@ namespace Cccc
             int ix = (int)Math.Floor(ox), iy = (int)Math.Floor(oy);
             Render(now, (float)(ox - ix), (float)(oy - iy));
             byte alpha = (byte)Math.Round(255 * (100 - st.Transparency) / 100.0 * Ease.OutCubic(Math.Min(1, vis * 1.5)));
-            Push(baseX + ix, baseY + iy, alpha);
+            Push(baseX + ix, baseY + iy + (int)Math.Round(stackDY), alpha);
         }
 
         void Push(int x, int y, byte alpha)
@@ -456,6 +566,11 @@ namespace Cccc
             vsync.Stop();
             Native.ShowWindow(Handle, Native.SW_HIDE);
             shown = false;
+            if (stack.Remove(this))
+            {
+                stackDY = stackTarget = 0;
+                Arrange();   // the rest glide back to their home spots
+            }
         }
 
         // Renders a frozen moment `age` seconds after an event, for the design sheet and the settings preview.
@@ -478,9 +593,9 @@ namespace Cccc
             Graphics g = surf.G;
             g.ResetTransform();
             if (cur == null) { g.Clear(Color.Transparent); return; }
-            if (shadowH != CardH || shadowTheme != th) Layout(s, th);
+            if (shadowH != CardH || shadowTheme != th || glassDirty) Layout(s, th);
 
-            bool warn = cur.Kind == Kind.Fail || cur.Kind == Kind.Empty || cur.Kind == Kind.WifiDown;
+            bool warn = cur.Kind == Kind.Fail || cur.Kind == Kind.Empty || cur.Kind == Kind.WifiDown || cur.Kind == Kind.AudioWarn;
             Color accent = cur.Kind == Kind.Caps ? (cur.CapsOn ? th.Ok : th.Meta) : (warn ? th.Warn : th.Ok);
             double te = now - tEvent;
 
@@ -523,7 +638,7 @@ namespace Cccc
                     g.DrawPath(pen, path);
 
             double remain = Ease.Clamp01((deadline - now) / duration);
-            if (visTarget > 0 && remain > 0 && !(role == Role.Wifi ? st.WifiStayUntilClicked : caps ? st.CapsStayUntilClicked : st.StayUntilClicked))
+            if (visTarget > 0 && remain > 0 && !(role == Role.Wifi ? st.WifiStayUntilClicked : role == Role.Audio ? st.AudioStayUntilClicked : caps ? st.CapsStayUntilClicked : st.StayUntilClicked))
             {
                 float x0 = CX + R, x1 = CX + W - R, y = Top + CardH - 3f;
                 using (var pen = new Pen(Color.FromArgb(th.Dark ? 70 : 60, accent), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
@@ -590,6 +705,58 @@ namespace Cccc
                     }
                     if (cur.Kind == Kind.WifiDown && a4 > 0)
                         Shapes.Partial(g, pen, new[] { new PointF(ix - 8.5f * k, iy + 11f * k), new PointF(ix + 8.5f * k, iy - 9f * k) }, a4);
+                }
+                return;
+            }
+            if (cur.Kind == Kind.Audio || cur.Kind == Kind.AudioWarn)
+            {
+                // Sound output glyph: speaker + sound waves, headphones, or a slashed speaker
+                // for "no output"; a × replaces the waves while the endpoint is muted.
+                double a1 = Ease.Clamp01(pc / 0.4), a2 = Ease.Clamp01((pc - 0.3) / 0.4);
+                double a3 = Ease.Clamp01((pc - 0.55) / 0.3), a4 = Ease.Clamp01((pc - 0.7) / 0.3);
+                using (var pen = new Pen(glyph, 2.3f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                {
+                    if (cur.Glyph == 1)
+                    {
+                        // Headband arc, then the two cups fading in.
+                        if (a1 > 0) g.DrawArc(pen, ix - 9f * k, iy - 8.5f * k, 18f * k, 18f * k, 180, 180 * (float)a1);
+                        if (a2 > 0)
+                            using (var b = new SolidBrush(Color.FromArgb((int)(255 * a2), glyph)))
+                            {
+                                using (var cup = Shapes.RoundRect(new RectangleF(ix - 9.5f * k, iy - 0.5f * k, 5.5f * k, 8f * k), 2.5f * k))
+                                    g.FillPath(b, cup);
+                                using (var cup = Shapes.RoundRect(new RectangleF(ix + 4f * k, iy - 0.5f * k, 5.5f * k, 8f * k), 2.5f * k))
+                                    g.FillPath(b, cup);
+                            }
+                        return;
+                    }
+                    if (a1 > 0)
+                        using (var b = new SolidBrush(Color.FromArgb((int)(255 * a1), glyph)))
+                        {
+                            g.FillRectangle(b, ix - 9f * k, iy - 3f * k, 4f * k, 6f * k);
+                            g.FillPolygon(b, new[]
+                            {
+                                new PointF(ix - 5f * k, iy - 3f * k), new PointF(ix - 0.5f * k, iy - 7f * k),
+                                new PointF(ix - 0.5f * k, iy + 7f * k), new PointF(ix - 5f * k, iy + 3f * k),
+                            });
+                        }
+                    if (cur.Glyph == 2)
+                    {
+                        if (a4 > 0)
+                            Shapes.Partial(g, pen, new[] { new PointF(ix - 8.5f * k, iy + 11f * k), new PointF(ix + 8.5f * k, iy - 9f * k) }, a4);
+                        return;
+                    }
+                    if (cur.Muted)
+                    {
+                        if (a2 > 0)
+                        {
+                            Shapes.Partial(g, pen, new[] { new PointF(ix + 4f * k, iy - 4f * k), new PointF(ix + 11f * k, iy + 4f * k) }, a2);
+                            Shapes.Partial(g, pen, new[] { new PointF(ix + 4f * k, iy + 4f * k), new PointF(ix + 11f * k, iy - 4f * k) }, a2);
+                        }
+                        return;
+                    }
+                    if (a2 > 0) g.DrawArc(pen, ix - 1f * k - 5.5f * k, iy - 5.5f * k, 11f * k, 11f * k, -52, 104 * (float)a2);
+                    if (a3 > 0) g.DrawArc(pen, ix - 1f * k - 9.5f * k, iy - 9.5f * k, 19f * k, 19f * k, -52, 104 * (float)a3);
                 }
                 return;
             }

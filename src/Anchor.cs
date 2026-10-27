@@ -19,9 +19,10 @@ namespace Cccc
 
         public static string Sig = "";
 
-        // ssid: the network's name when known; on recent Windows 11 the Wi-Fi tray button's
-        // accessible name contains it, whatever the display language.
-        public static Spot Wifi(string ssid, out float dpiScale)
+        // nameHint: used by the Wi-Fi and sound-output cards — the network name or the output
+        // device's friendly name; on recent Windows the matching tray button's accessible name
+        // contains it, whatever the display language.
+        public static Spot Tray(string nameHint, out float dpiScale)
         {
             dpiScale = 1;
             var spot = new Spot { Edge = 3 };
@@ -43,7 +44,7 @@ namespace Cccc
             else spot.Work = SystemInformation.WorkingArea;
 
             spot.Icon = ControlCenter(tray);
-            if (spot.Icon.IsEmpty) spot.Icon = TrayIcon(tray, ssid);
+            if (spot.Icon.IsEmpty) spot.Icon = TrayIcon(tray, nameHint);
             if (spot.Icon.IsEmpty && tray != IntPtr.Zero)
             {
                 IntPtr area = Native.FindWindowEx(tray, IntPtr.Zero, "TrayNotifyWnd", null);
@@ -113,9 +114,9 @@ namespace Cccc
 
         // Windows 11 26H2: the tray buttons are SystemTrayIcon elements; the Wi-Fi one's
         // name carries the network name ("网络 PolyUWLAN" / "Network PolyUWLAN").
-        static Rectangle TrayIcon(IntPtr tray, string ssid)
+        static Rectangle TrayIcon(IntPtr tray, string nameHint)
         {
-            if (tray == IntPtr.Zero || string.IsNullOrEmpty(ssid)) return Rectangle.Empty;
+            if (tray == IntPtr.Zero || string.IsNullOrEmpty(nameHint)) return Rectangle.Empty;
             try
             {
                 var all = AutomationElement.FromHandle(tray).FindAll(TreeScope.Descendants,
@@ -124,7 +125,7 @@ namespace Cccc
                 {
                     var el = all[i];
                     string name = el.Current.Name;
-                    if (name == null || name.IndexOf(ssid, StringComparison.Ordinal) < 0) continue;
+                    if (name == null || name.IndexOf(nameHint, StringComparison.Ordinal) < 0) continue;
                     var r = el.Current.BoundingRectangle;
                     if (r.IsEmpty || r.Width <= 0 || r.Height <= 0) continue;
                     return new Rectangle((int)Math.Round(r.X), (int)Math.Round(r.Y), (int)Math.Round(r.Width), (int)Math.Round(r.Height));

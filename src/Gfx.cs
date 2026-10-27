@@ -358,27 +358,36 @@ namespace Cccc
     // Liquid Glass material: the screen behind the card, blurred, bent at the rim like a lens, tinted, with a specular edge.
     static class GlassLayer
     {
-        // Opaque screen pixels of a w×h box at (x, y). A visible `self` is kept out of the capture, which needs Windows 10 2004.
-        public static int[] Capture(IntPtr self, int x, int y, int w, int h)
+        // Opaque screen pixels of a w×h box at (x, y). Every visible card window is kept out
+        // of the capture, which needs Windows 10 2004; if one can't be excluded, returns null.
+        public static int[] Capture(IntPtr[] exclude, int x, int y, int w, int h)
         {
-            bool hidden = self != IntPtr.Zero && Native.SetWindowDisplayAffinity(self, Native.WDA_EXCLUDEFROMCAPTURE);
-            if (self != IntPtr.Zero && !hidden) return null;
-            IntPtr screen = Native.GetDC(IntPtr.Zero), dc = Native.CreateCompatibleDC(screen), bits;
-            var bi = new Native.BITMAPINFOHEADER { biSize = 40, biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
-            IntPtr bmp = Native.CreateDIBSection(dc, ref bi, 0, out bits, IntPtr.Zero, 0);
-            IntPtr old = Native.SelectObject(dc, bmp);
-            bool ok = Native.BitBlt(dc, 0, 0, w, h, screen, x, y, Native.SRCCOPY);
-            if (hidden) Native.SetWindowDisplayAffinity(self, 0);
-            int[] px = null;
-            if (ok)
+            var hidden = new List<IntPtr>();
+            bool failed = false;
+            foreach (IntPtr wnd in exclude)
             {
-                px = new int[w * h];
-                Marshal.Copy(bits, px, 0, px.Length);
+                if (wnd == IntPtr.Zero) continue;
+                if (Native.SetWindowDisplayAffinity(wnd, Native.WDA_EXCLUDEFROMCAPTURE)) hidden.Add(wnd);
+                else { failed = true; break; }
             }
-            Native.SelectObject(dc, old);
-            Native.DeleteObject(bmp);
-            Native.DeleteDC(dc);
-            Native.ReleaseDC(IntPtr.Zero, screen);
+            int[] px = null;
+            if (!failed)
+            {
+                IntPtr screen = Native.GetDC(IntPtr.Zero), dc = Native.CreateCompatibleDC(screen), bits;
+                var bi = new Native.BITMAPINFOHEADER { biSize = 40, biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
+                IntPtr bmp = Native.CreateDIBSection(dc, ref bi, 0, out bits, IntPtr.Zero, 0);
+                IntPtr old = Native.SelectObject(dc, bmp);
+                if (Native.BitBlt(dc, 0, 0, w, h, screen, x, y, Native.SRCCOPY))
+                {
+                    px = new int[w * h];
+                    Marshal.Copy(bits, px, 0, px.Length);
+                }
+                Native.SelectObject(dc, old);
+                Native.DeleteObject(bmp);
+                Native.DeleteDC(dc);
+                Native.ReleaseDC(IntPtr.Zero, screen);
+            }
+            foreach (IntPtr wnd in hidden) Native.SetWindowDisplayAffinity(wnd, 0);
             return px;
         }
 

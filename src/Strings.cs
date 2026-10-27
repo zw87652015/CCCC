@@ -93,6 +93,21 @@ namespace Cccc
         public static string WifiNoAdapter { get { return T("No Wi-Fi adapter", "没有 Wi-Fi 适配器"); } }
         public static string WifiOpenLocation { get { return T("Open Location settings", "打开定位设置"); } }
 
+        // Sound output card. Details are joined with " · " and each shows only when known.
+        public static string AudioTitle(string name) { return T("Sound output: " + name, "声音输出：" + name); }
+        public static string AudioNone { get { return T("No sound output", "没有声音输出设备"); } }
+        public static string AudioVolume(int n) { return T("Volume " + n + "%", "音量 " + n + "%"); }
+        public static string AudioMuted { get { return T("Muted", "已静音"); } }
+        public static string AudioWas(string name) { return T("Was " + name, "原为 " + name); }
+        public static string MenuAudio { get { return T("Show sound output changes", "声音输出切换时提醒我"); } }
+        public static string HintAudio { get { return T("Show a card near the tray when sound switches to another device", "声音切换到其他设备时在托盘附近弹出卡片"); } }
+        public static string TabAudio { get { return T("Sound output", "声音输出"); } }
+
+        public static string TrayPrompt { get { return T("Show the CCCC icon in the system tray?\n\nYes: the icon sits in the tray; right-click it for options.\nNo: CCCC runs in the background with no icon. Start CCCC.exe again to open Customize; end CCCC.exe in Task Manager to quit.", "在系统托盘显示 CCCC 图标吗？\n\n是：图标显示在托盘中，右键可打开选项。\n否：CCCC 在后台运行，不显示图标。再次启动 CCCC.exe 可打开自定义窗口；在任务管理器中结束 CCCC.exe 即可退出。"); } }
+        public static string ReadyHiddenSub { get { return T("Running in the background. Start CCCC.exe again for settings.", "正在后台运行。再次启动 CCCC.exe 可打开设置。"); } }
+        public static string MenuTray { get { return T("Show tray icon", "显示托盘图标"); } }
+        public static string HintTray { get { return T("Off: no icon. Start CCCC.exe again to open this window; end it in Task Manager to quit.", "关闭后不显示图标。再次启动 CCCC.exe 可打开此窗口；在任务管理器中结束它即可退出。"); } }
+
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }
         public static string MenuSound { get { return T("Sound", "提示音"); } }

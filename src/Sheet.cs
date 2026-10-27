@@ -14,6 +14,7 @@ namespace Cccc
             var card = new Card();
             var capsCard = new Card(Role.Caps);
             var wifiCard = new Card(Role.Wifi);
+            var audioCard = new Card(Role.Audio);
             int cw = (int)Math.Ceiling(card.CanvasW * s), ch = (int)Math.Ceiling(card.CanvasH * s);
             var rows = Rows();
             int iconRow = 120;
@@ -34,11 +35,13 @@ namespace Cccc
                     card.Layout(s, themes[col]);
                     capsCard.Layout(s, themes[col]);
                     wifiCard.Layout(s, themes[col]);
+                    audioCard.Layout(s, themes[col]);
                     for (int row = 0; row < rows.Length; row++)
                     {
                         var r = rows[row];
                         var which = r.Item1.Kind == Kind.Caps ? capsCard
-                            : r.Item1.Kind == Kind.WifiUp || r.Item1.Kind == Kind.WifiDown ? wifiCard : card;
+                            : r.Item1.Kind == Kind.WifiUp || r.Item1.Kind == Kind.WifiDown ? wifiCard
+                            : r.Item1.Kind == Kind.Audio || r.Item1.Kind == Kind.AudioWarn ? audioCard : card;
                         int px = col * cw, py = row * ch + ch - (int)Math.Ceiling(which.CanvasH * s);
                         if (themes[col].Glass) which.Backdrop(wall, sheet.Width, px, py);
                         which.Still(r.Item1, r.Item2, r.Item3);
@@ -117,6 +120,10 @@ namespace Cccc
                 Row(new Content { Kind = Kind.WifiUp, Title = L.WifiNowBand("HomeNet", 5), Sub = L.Detail(L.Signal(74), L.WifiWasBand(2)) }, false, 1.2),
                 Row(new Content { Kind = Kind.WifiUp, Title = L.WifiReconnected("HomeNet"), Sub = L.Detail(L.Band(2), L.Signal(91), L.WifiOffline(6)) }, false, 1.2),
                 Row(new Content { Kind = Kind.WifiDown, Title = L.WifiDisconnected, Sub = L.WifiWasOn("CoffeeShop") }, false, 1.2),
+                Row(new Content { Kind = Kind.AudioWarn, Glyph = 0, Title = L.AudioTitle("Speakers"), Sub = L.Detail(L.AudioVolume(64), L.AudioWas("Headphones"), "Realtek(R) Audio") }, false, 1.2),
+                Row(new Content { Kind = Kind.Audio, Glyph = 1, Title = L.AudioTitle("Headphones"), Sub = L.Detail(L.AudioVolume(40), L.AudioWas("Speakers"), "WH-1000XM4") }, false, 1.2),
+                Row(new Content { Kind = Kind.Audio, Glyph = 0, Muted = true, Title = L.AudioTitle("Speakers"), Sub = L.Detail(L.AudioMuted, L.AudioWas("Headphones"), "Realtek(R) Audio") }, false, 1.2),
+                Row(new Content { Kind = Kind.AudioWarn, Glyph = 2, Title = L.AudioNone, Sub = L.AudioWas("Headphones") }, false, 1.2),
             };
         }
 

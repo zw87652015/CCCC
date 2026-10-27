@@ -64,13 +64,13 @@ namespace Cccc
         readonly Settings set;
         readonly Action changed;
         readonly Action<bool> showSample, test;
-        readonly Action showCaps, showWifi;
+        readonly Action showCaps, showWifi, showAudio;
         readonly WifiWatch wifiWatch;
         readonly Card card = new Card();
         readonly Window w;
         readonly DispatcherTimer armTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        readonly RadioButton[] navs = new RadioButton[8];
-        readonly StackPanel[] pages = new StackPanel[8];
+        readonly RadioButton[] navs = new RadioButton[9];
+        readonly StackPanel[] pages = new StackPanel[9];
         readonly TextBlock txtTitle;
         readonly Button btnReset;
         readonly StackPanel pageHost;
@@ -81,10 +81,10 @@ namespace Cccc
         readonly Button[] tiles = new Button[5];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay, chkWifi, chkWifiStay;
+        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay, chkWifi, chkWifiStay, chkAudio, chkAudioStay, chkTray;
         Picker pickMain, pickCaps;
-        Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur, sldWifiDur;
-        TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur, lblWifiDur, lblWifiNames;
+        Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur, sldWifiDur, sldAudioDur;
+        TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur, lblWifiDur, lblWifiNames, lblAudioDur;
         ComboBox cmbFont, cmbIgnore;
         StackPanel ignoreList;
         Sound soundOk, soundFail;
@@ -100,13 +100,14 @@ namespace Cccc
         bool loading, armed, dark, builtZh, expanded, lastFull, popLoading, switching;
         int page;
 
-        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action onShowWifi, Action<bool> onTest, WifiWatch wifiWatch)
+        public Customize(Settings settings, Action onChanged, Action<bool> onShowSample, Action onShowCaps, Action onShowWifi, Action onShowAudio, Action<bool> onTest, WifiWatch wifiWatch)
         {
             set = settings;
             changed = onChanged;
             showSample = onShowSample;
             showCaps = onShowCaps;
             showWifi = onShowWifi;
+            showAudio = onShowAudio;
             this.wifiWatch = wifiWatch;
             test = onTest;
 
@@ -171,6 +172,7 @@ namespace Cccc
             chkWarn.IsChecked = set.FailHint;
             chkCaps.IsChecked = set.CapsHint;
             chkStart.IsChecked = Settings.AutoStart;
+            chkTray.IsChecked = !set.HideTray;
             chkAuto.IsChecked = set.AutoUpdate;
             rbLang[set.Lang == "en" ? 1 : set.Lang == "zh" ? 2 : 0].IsChecked = true;
             rbTheme[set.ThemeMode].IsChecked = true;
@@ -203,6 +205,11 @@ namespace Cccc
             sldWifiDur.IsEnabled = !set.WifiStayUntilClicked;
             lblWifiDur.Text = (set.WifiDurationMs / 1000.0).ToString("0.0") + " s";
             chkWifiStay.IsChecked = set.WifiStayUntilClicked;
+            chkAudio.IsChecked = set.AudioHint;
+            sldAudioDur.Value = set.AudioDurationMs;
+            sldAudioDur.IsEnabled = !set.AudioStayUntilClicked;
+            lblAudioDur.Text = (set.AudioDurationMs / 1000.0).ToString("0.0") + " s";
+            chkAudioStay.IsChecked = set.AudioStayUntilClicked;
             lblWifiNames.Text = !wifiWatch.Available ? L.WifiNoAdapter
                 : wifiWatch.NamesAllowed == null ? ""
                 : wifiWatch.NamesAllowed == true ? L.WifiAllowed : L.WifiNotAllowed;
@@ -261,17 +268,23 @@ namespace Cccc
             return s.WifiHint + "|" + s.WifiDurationMs + "|" + s.WifiStayUntilClicked;
         }
 
+        static string SigAudio(Settings s)
+        {
+            return s.AudioHint + "|" + s.AudioDurationMs + "|" + s.AudioStayUntilClicked;
+        }
+
         // Every user change: apply once through `changed`, re-sync the window, then pop the real card on screen.
         void Edit(Action a)
         {
             if (loading) return;
-            string shared = SigShared(set), failed = SigFailed(set), caps = SigCaps(set), wifi = SigWifi(set);
+            string shared = SigShared(set), failed = SigFailed(set), caps = SigCaps(set), wifi = SigWifi(set), audio = SigAudio(set);
             a();
             changed();
             Reload();
             if (SigShared(set) != shared) showSample(false);
             else if (SigCaps(set) != caps) showCaps();
             else if (SigWifi(set) != wifi && set.WifiHint) showWifi();
+            else if (SigAudio(set) != audio && set.AudioHint) showAudio();
             else if (SigFailed(set) != failed && set.FailHint) showSample(true);
         }
 
@@ -339,9 +352,9 @@ namespace Cccc
         {
             builtZh = L.Zh;
             w.Title = L.CustomizeTitle;
-            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAbout };
-            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE765", "\uE701", "\uE946" };
-            for (int i = 0; i < 8; i++)
+            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAudio, L.TabAbout };
+            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE765", "\uE701", "\uE7F5", "\uE946" };
+            for (int i = 0; i < 9; i++)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
                 row.Children.Add(new TextBlock { Text = glyphs[i], Style = Res<Style>("Glyph"), Margin = new Thickness(0, 0, 12, 0) });
@@ -354,7 +367,7 @@ namespace Cccc
 
         string PageTitle(int index)
         {
-            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAbout }[index];
+            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAudio, L.TabAbout }[index];
         }
 
         void ShowPage(int index)
@@ -373,8 +386,8 @@ namespace Cccc
 
         void BuildNav()
         {
-            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource", "navCaps", "navWifi", "navAbout" };
-            for (int i = 0; i < 8; i++)
+            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource", "navCaps", "navWifi", "navAudio", "navAbout" };
+            for (int i = 0; i < 9; i++)
             {
                 int index = i;
                 var nav = (RadioButton)w.FindName(names[i]);
@@ -511,7 +524,8 @@ namespace Cccc
             pages[4] = BuildSource();
             pages[5] = BuildCaps();
             pages[6] = BuildWifi();
-            pages[7] = BuildAbout();
+            pages[7] = BuildAudio();
+            pages[8] = BuildAbout();
             foreach (StackPanel p in pages) pageHost.Children.Add(p);
         }
 
@@ -521,9 +535,11 @@ namespace Cccc
             chkWarn = Toggle();
             chkStart = Toggle();
             chkAuto = Toggle();
+            chkTray = Toggle();
             BindToggle(chkPause, v => set.Paused = v);
             BindToggle(chkWarn, v => set.FailHint = v);
             BindToggle(chkStart, v => Settings.AutoStart = v);
+            BindToggle(chkTray, v => set.HideTray = !v);
             BindToggle(chkAuto, v => set.AutoUpdate = v);
             RadioButton[] lang;
             var langSeg = SegOf(new[] { L.LangSystem, "English", "中文" }, out lang);
@@ -541,6 +557,7 @@ namespace Cccc
                 SettingCard(L.IgnoreApps, L.HintIgnore, cmbIgnore),
                 ignoreList,
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
+                SettingCard(L.MenuTray, L.HintTray, chkTray),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
                 SettingCard(L.MenuLanguage, L.HintLanguage, langSeg));
         }
@@ -1174,6 +1191,23 @@ namespace Cccc
                 SettingCard(L.WifiNames, L.HintWifiNames, namesRow));
         }
 
+        // MARK: Sound output
+
+        StackPanel BuildAudio()
+        {
+            chkAudio = Toggle();
+            BindToggle(chkAudio, v => set.AudioHint = v);
+            sldAudioDur = Slide(500, 10000, 100, v => set.AudioDurationMs = v);
+            lblAudioDur = new TextBlock { Style = Res<Style>("ValueText"), Width = 60, Margin = new Thickness(10, 0, 0, 0) };
+            var durRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldAudioDur, lblAudioDur } };
+            chkAudioStay = Toggle();
+            BindToggle(chkAudioStay, v => set.AudioStayUntilClicked = v);
+            return PageOf(
+                SettingCard(L.MenuAudio, L.HintAudio, chkAudio),
+                SettingCard(L.DurationTitle, L.HintDuration, durRow),
+                SettingCard(L.StayUntilClicked, L.HintStay, chkAudioStay));
+        }
+
         // MARK: About
 
         StackPanel BuildAbout()
@@ -1367,10 +1401,14 @@ namespace Cccc
                 case "capsWidth": return sldCapsW;
                 case "capsDuration": return sldCapsDur;
                 case "capsStay": return chkCapsStay;
+                case "tray": return chkTray;
                 case "wifi": return chkWifi;
                 case "wifiDuration": return sldWifiDur;
                 case "wifiStay": return chkWifiStay;
                 case "wifiNames": return lblWifiNames;
+                case "audio": return chkAudio;
+                case "audioDuration": return sldAudioDur;
+                case "audioStay": return chkAudioStay;
                 case "capsHeight": return sldCapsH;
                 case "capsSame": return pickCaps.ChipSame;
             }

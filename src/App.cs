@@ -14,14 +14,16 @@ namespace Cccc
         readonly Card card = new Card();
         readonly Card capsCard = new Card(Role.Caps);
         readonly Card wifiCard = new Card(Role.Wifi);
+        readonly Card audioCard = new Card(Role.Audio);
         readonly WifiWatch wifi = new WifiWatch();
+        readonly AudioWatch audio = new AudioWatch();
         readonly Hub hub = new Hub();
         readonly KeyHook hook;
         readonly NotifyIcon tray = new NotifyIcon();
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
         readonly Timer updateTimer = new Timer { Interval = 10000 };
-        readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
+        readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miAudio, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
         readonly MenuItem[] miDetails = new MenuItem[4];
         readonly MenuItem miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miCustomize, miUpdate, miQuit;
         readonly SynchronizationContext ui;
@@ -44,6 +46,13 @@ namespace Cccc
         {
             ui = new WindowsFormsSynchronizationContext();
             L.Apply(set.Lang);
+            // A manual start asks about the tray icon; --silent (sign-in) and --updated reuse the saved choice.
+            if (!silent && !updated)
+            {
+                set.HideTray = MessageBox.Show(L.TrayPrompt, "CCCC", MessageBoxButtons.YesNo, MessageBoxIcon.Information,
+                    set.HideTray ? MessageBoxDefaultButton.Button2 : MessageBoxDefaultButton.Button1) == DialogResult.No;
+                set.Save();
+            }
             sounds.Load(set.SoundOkFile, set.SoundFailFile);
             card.CreateWindow();
             card.Moved += delegate(int x, int y)
@@ -61,12 +70,14 @@ namespace Cccc
                 Changed();
             };
             wifiCard.CreateWindow();
+            audioCard.CreateWindow();
             wifi.Changed += OnWifi;
+            audio.Changed += OnAudio;
             hook = new KeyHook(hub.Handle);
 
             hub.ClipboardChanged += delegate { debounce.Stop(); debounce.Start(); };
             hub.Key += OnKey;
-            hub.Hello += delegate { Notice(L.RunningTitle, L.RunningSub); };
+            hub.Hello += delegate { if (set.HideTray) OpenCustomize(); else Notice(L.RunningTitle, L.RunningSub); };
             debounce.Tick += delegate { debounce.Stop(); OnClipboard(); };
             failCheck.Tick += delegate { failCheck.Stop(); OnFailCheck(); };
             updateTimer.Tick += delegate { updateTimer.Interval = 24 * 60 * 60 * 1000; if (set.AutoUpdate) CheckUpdate(false); };
@@ -78,6 +89,7 @@ namespace Cccc
             miHint = new MenuItem(L.MenuHint, delegate { set.FailHint = !set.FailHint; set.Save(); Sync(); });
             miCaps = new MenuItem(L.MenuCaps, delegate { set.CapsHint = !set.CapsHint; set.Save(); Sync(); });
             miWifi = new MenuItem(L.MenuWifi, delegate { set.WifiHint = !set.WifiHint; set.Save(); Sync(); });
+            miAudio = new MenuItem(L.MenuAudio, delegate { set.AudioHint = !set.AudioHint; set.Save(); Sync(); });
             miSourceOn = new MenuItem(L.MenuSourceOn, delegate { set.ShowSource = !set.ShowSource; set.Save(); Sync(); });
             miWhen = new MenuItem(L.SourceWhen) { Enabled = false };
             miWhenAlways = new MenuItem(L.SourceAlways, delegate { Pick(ref set.SourceWhen, 0); }) { RadioCheck = true };
@@ -107,7 +119,7 @@ namespace Cccc
             tray.ContextMenu = new ContextMenu(new[]
             {
                 miShow,
-                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miSource, miStartup, miAutoUpdate, miLang,
+                new MenuItem("-"), miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miAudio, miSource, miStartup, miAutoUpdate, miLang,
                 new MenuItem("-"), miCustomize, miUpdate,
                 new MenuItem("-"), miQuit,
             });
@@ -116,13 +128,12 @@ namespace Cccc
             SystemEvents.UserPreferenceChanged += (o, e) => { if (e.Category == UserPreferenceCategory.General) Sync(); };
             SystemEvents.PowerModeChanged += delegate(object o, PowerModeChangedEventArgs e)
             {
-                if (e.Mode == PowerModes.Suspend) wifi.Suspend();
-                else if (e.Mode == PowerModes.Resume) wifi.Resume();
+                if (e.Mode == PowerModes.Suspend) { wifi.Suspend(); audio.Suspend(); }
+                else if (e.Mode == PowerModes.Resume) { wifi.Resume(); audio.Resume(); }
             };
 
             if (Settings.AutoStart) Settings.AutoStart = true;
             Sync();
-            tray.Visible = true;
             hook.Start();
             updateTimer.Start();
 
@@ -138,7 +149,7 @@ namespace Cccc
                 if (now.Thumb != null) now.Thumb.Dispose();
             }
             if (updated) Notice(L.UpdatedTitle(Updater.Show(Updater.Current)), L.UpdatedSub);
-            else if (!silent) Notice(L.ReadyTitle, L.ReadySub);
+            else if (!silent) Notice(L.ReadyTitle, set.HideTray ? L.ReadyHiddenSub : L.ReadySub);
         }
 
         void SetLang(string lang)
@@ -160,7 +171,7 @@ namespace Cccc
         {
             if (customize == null)
             {
-                customize = new Customize(set, Changed, ShowSample, ShowCapsSample, ShowWifiSample, TestSound, wifi);
+                customize = new Customize(set, Changed, ShowSample, ShowCapsSample, ShowWifiSample, ShowAudioSample, TestSound, wifi);
                 customize.Closed += delegate { customize = null; };
             }
             customize.Show();
@@ -208,14 +219,54 @@ namespace Cccc
                                   Sub = L.Detail(L.Band(ch.Band), ch.Signal >= 0 ? L.Signal(ch.Signal) : null) };
             else
                 c = new Content { Kind = Kind.WifiUp, Title = L.WifiConnected(null), Sub = L.WifiNeedLocation };
-            wifiCard.WifiAnchorName = ch.Name;
+            wifiCard.AnchorName = ch.Name;
             wifiCard.Show(c, false);
+        }
+
+        // The preview shows the real current output device, not fake data.
+        void ShowAudioSample()
+        {
+            var ch = audio.Current();
+            audioCard.AnchorName = ch != null && !ch.None ? ch.Hint : null;
+            audioCard.Show(AudioContent(ch, true), false);
+        }
+
+        static Content AudioContent(AudioWatch.Change ch, bool preview)
+        {
+            if (ch == null || ch.None)
+            {
+                return new Content
+                {
+                    Kind = Kind.AudioWarn, Glyph = 2, Title = L.AudioNone,
+                    Sub = !preview && ch != null && ch.PrevName != null ? L.AudioWas(ch.PrevName) : "",
+                };
+            }
+            string prevLabel = null;
+            if (!preview && ch.PrevName != null)
+                prevLabel = ch.PrevName == ch.Name ? ch.PrevDevice ?? ch.PrevName : ch.PrevName;
+            return new Content
+            {
+                // Loud over the room's speakers right after headphones were the output: warn.
+                Kind = !ch.Personal && !ch.Muted && ch.Volume != 0 && ch.PrevPersonal ? Kind.AudioWarn : Kind.Audio,
+                Glyph = ch.Personal ? 1 : 0,
+                Muted = ch.Muted,
+                Title = L.AudioTitle(ch.Name),
+                Sub = L.Detail(ch.Muted ? L.AudioMuted : ch.Volume >= 0 ? L.AudioVolume(ch.Volume) : null,
+                    prevLabel != null ? L.AudioWas(prevLabel) : null, ch.Device),
+            };
+        }
+
+        void OnAudio(AudioWatch.Change ch)
+        {
+            if (!set.AudioHint || set.Paused || Native.UserBusy()) return;
+            audioCard.AnchorName = ch.Hint ?? ch.Name;
+            audioCard.Show(AudioContent(ch, false), false);
         }
 
         void OnWifi(WifiWatch.Change ch)
         {
             if (!set.WifiHint || set.Paused || Native.UserBusy()) return;
-            wifiCard.WifiAnchorName = ch.Name ?? ch.Prev;
+            wifiCard.AnchorName = ch.Name ?? ch.Prev;
             string sig = ch.Signal >= 0 ? L.Signal(ch.Signal) : null;
             var c = new Content { Kind = ch.Kind == WifiWatch.Disconnected ? Kind.WifiDown : Kind.WifiUp };
             if (ch.Kind == WifiWatch.Switched)
@@ -253,7 +304,9 @@ namespace Cccc
             card.Apply(set);
             capsCard.Apply(set);
             wifiCard.Apply(set);
+            audioCard.Apply(set);
             if (set.WifiHint) wifi.Start(ui); else wifi.Stop();
+            if (set.AudioHint) audio.Start(ui); else audio.Stop();
             miShow.Text = L.MenuShow;
             miPause.Text = L.MenuPause;
             miSound.Text = L.MenuSound;
@@ -261,6 +314,7 @@ namespace Cccc
             miHint.Text = L.MenuHint;
             miCaps.Text = L.MenuCaps;
             miWifi.Text = L.MenuWifi;
+            miAudio.Text = L.MenuAudio;
             miSource.Text = L.MenuSource;
             miSourceOn.Text = L.MenuSourceOn;
             miWhen.Text = L.SourceWhen;
@@ -282,6 +336,7 @@ namespace Cccc
             miHint.Checked = set.FailHint;
             miCaps.Checked = set.CapsHint;
             miWifi.Checked = set.WifiHint;
+            miAudio.Checked = set.AudioHint;
             miSourceOn.Checked = set.ShowSource;
             miWhenAlways.Checked = set.SourceWhen == 0;
             miWhenAuto.Checked = set.SourceWhen == 1;
@@ -303,6 +358,7 @@ namespace Cccc
             using (var bmp = Icons.Tray(size, Theme.TaskbarLight(), set.Paused)) trayHandle = bmp.GetHicon();
             tray.Icon = Icon.FromHandle(trayHandle);
             tray.Text = set.Paused ? L.TipPaused : L.Tip;
+            tray.Visible = !set.HideTray;
             if (old != IntPtr.Zero) Native.DestroyIcon(old);
         }
 
@@ -496,9 +552,11 @@ namespace Cccc
             tray.Dispose();
             hub.Close();
             wifi.Stop();
+            audio.Stop();
             card.DestroyHandle();
             capsCard.DestroyHandle();
             wifiCard.DestroyHandle();
+            audioCard.DestroyHandle();
             Application.Exit();
         }
     }
