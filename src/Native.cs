@@ -64,6 +64,9 @@ namespace Cccc
         [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
         [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
+        [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
+        [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hwnd, int index);
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT pt);
         [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
@@ -248,16 +251,70 @@ namespace Cccc
             catch (Exception) { }
         }
 
-        // Fullscreen game, presentation, or locked screen.
+        const int WS_CAPTION = 0x00C00000;
+
+        // Fullscreen game, presentation, or locked screen. QUNS_BUSY(2) is only a heuristic —
+        // a permanent borderless overlay can keep it on forever, so it also needs the
+        // foreground window to really be full screen (not maximized, not the shell).
         public static bool UserBusy()
         {
             try
             {
                 int st;
-                if (SHQueryUserNotificationState(out st) == 0) return st >= 1 && st <= 4;
+                if (SHQueryUserNotificationState(out st) != 0) return false;
+                if (st == 2 && !ForegroundFullScreen())
+                {
+                    if (debugPath != null) Debug("busy: state=2 ignored, foreground not full screen (" + ForegroundDesc() + ")");
+                    return false;
+                }
+                if (st >= 1 && st <= 4)
+                {
+                    if (debugPath != null) Debug("busy: state=" + st + ", foreground=" + ForegroundDesc());
+                    return true;
+                }
             }
             catch (Exception) { }
             return false;
+        }
+
+        static bool ForegroundFullScreen()
+        {
+            IntPtr hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero || IsIconic(hwnd) || IsZoomed(hwnd)) return false;
+            string cls = ClassOf(hwnd);
+            if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd") return false;
+            if ((GetWindowLong(hwnd, -16 /* GWL_STYLE */) & WS_CAPTION) == WS_CAPTION) return false;
+            RECT r;
+            if (!GetWindowRect(hwnd, out r)) return false;
+            IntPtr mon = MonitorFromWindow(hwnd, 2);
+            var mi = new MONITORINFO { cbSize = Marshal.SizeOf(typeof(MONITORINFO)) };
+            if (!GetMonitorInfo(mon, ref mi)) return false;
+            return r.Left <= mi.rcMonitor.Left && r.Top <= mi.rcMonitor.Top
+                && r.Right >= mi.rcMonitor.Right && r.Bottom >= mi.rcMonitor.Bottom;
+        }
+
+        static string ForegroundDesc()
+        {
+            string cls;
+            try { cls = ClassOf(GetForegroundWindow()); } catch (Exception) { cls = "?"; }
+            string exe = null;
+            try { exe = Sources.ForegroundExe(); } catch (Exception) { }
+            return exe != null ? cls + " " + exe : cls;
+        }
+
+        // CCCC_DEBUG=1 appends timestamped lines to %TEMP%\CCCC\debug.log; silent otherwise.
+        static readonly string debugPath = Environment.GetEnvironmentVariable("CCCC_DEBUG") == "1"
+            ? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "CCCC", "debug.log") : null;
+
+        public static void Debug(string line)
+        {
+            if (debugPath == null) return;
+            try
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(debugPath));
+                System.IO.File.AppendAllText(debugPath, DateTime.Now.ToString("HH:mm:ss.fff ") + line + "\r\n");
+            }
+            catch (Exception) { }
         }
     }
 }

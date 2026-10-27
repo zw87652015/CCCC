@@ -258,14 +258,16 @@ namespace Cccc
 
         void OnAudio(AudioWatch.Change ch)
         {
-            if (!set.AudioHint || set.Paused || Native.UserBusy()) return;
+            if (!set.AudioHint || set.Paused) return;
+            if (Native.UserBusy()) { Native.Debug("audio: skipped (busy)"); return; }
             audioCard.AnchorName = ch.Hint ?? ch.Name;
             audioCard.Show(AudioContent(ch, false), false);
         }
 
         void OnWifi(WifiWatch.Change ch)
         {
-            if (!set.WifiHint || set.Paused || Native.UserBusy()) return;
+            if (!set.WifiHint || set.Paused) return;
+            if (Native.UserBusy()) { Native.Debug("wifi: skipped (busy)"); return; }
             wifiCard.AnchorName = ch.Name ?? ch.Prev;
             string sig = ch.Signal >= 0 ? L.Signal(ch.Signal) : null;
             var c = new Content { Kind = ch.Kind == WifiWatch.Disconnected ? Kind.WifiDown : Kind.WifiUp };
@@ -378,7 +380,8 @@ namespace Cccc
             bool on = Native.CapsLock();
             if (on == capsOn) return;
             capsOn = on;
-            if (!set.CapsHint || set.Paused || Native.UserBusy()) return;
+            if (!set.CapsHint || set.Paused) return;
+            if (Native.UserBusy()) { Native.Debug("caps: skipped (busy)"); return; }
             capsCard.Show(new Content { Kind = Kind.Caps, Title = L.Caps, CapsOn = on }, false);
         }
 
@@ -415,14 +418,15 @@ namespace Cccc
             c.Count = count;
             c.Title = cut && count == 1 ? L.Cut : L.Again[Math.Min(count, L.Again.Length) - 1];
             ApplySource(c, src, set.ShowSource && src != null && (set.SourceWhen == 0 || !(keyed && src.Obvious)));
-            if (Native.UserBusy()) { if (c.Thumb != null) c.Thumb.Dispose(); return; }
+            if (Native.UserBusy()) { Native.Debug("copy: skipped (busy)"); if (c.Thumb != null) c.Thumb.Dispose(); return; }
             card.Show(c, repeat);
             if (set.Sound) sounds.Ok();
         }
 
         void OnFailCheck()
         {
-            if (Native.GetClipboardSequenceNumber() != keySeq || Native.UserBusy()) return;
+            if (Native.GetClipboardSequenceNumber() != keySeq) return;
+            if (Native.UserBusy()) { Native.Debug("fail check: skipped (busy)"); return; }
             if (set.Ignores(Sources.ForegroundExe())) return;
             double now = card.Now;
             bool repeat = now - lastFail < 6;
