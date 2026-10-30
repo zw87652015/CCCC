@@ -23,7 +23,6 @@ namespace Cccc
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
         readonly Timer updateTimer = new Timer { Interval = 10000 };
-        readonly Timer trim = new Timer { Interval = 3000 };
         readonly MenuItem miShow, miPause, miSound, miStopSounds, miHint, miCaps, miWifi, miAudio, miSource, miSourceOn, miWhen, miWhenAlways, miWhenAuto, miDetail;
         readonly MenuItem[] miDetails = new MenuItem[4];
         readonly MenuItem miStartup, miAutoUpdate, miLang, miLangEn, miLangZh, miCustomize, miUpdate, miQuit;
@@ -71,12 +70,10 @@ namespace Cccc
 
             hub.ClipboardChanged += delegate { debounce.Stop(); debounce.Start(); };
             hub.Key += OnKey;
-            hub.Hello += delegate { if (set.HideTray) OpenCustomize(); else Notice(L.RunningTitle, L.RunningSub); };
+            hub.Hello += delegate { Notice(L.RunningTitle, L.RunningSub); };
             debounce.Tick += delegate { debounce.Stop(); OnClipboard(); };
             failCheck.Tick += delegate { failCheck.Stop(); OnFailCheck(); };
             updateTimer.Tick += delegate { updateTimer.Interval = 24 * 60 * 60 * 1000; if (set.AutoUpdate) CheckUpdate(false); };
-            trim.Tick += delegate { trim.Stop(); if (customize == null) Native.TrimMemory(); };
-            Card.AllHidden += delegate { trim.Stop(); trim.Start(); };
 
             miShow = new MenuItem(L.MenuShow, delegate { ShowClipboard(); }) { DefaultItem = true };
             miPause = new MenuItem(L.MenuPause, delegate { set.Paused = !set.Paused; set.Save(); Sync(); });
@@ -132,7 +129,6 @@ namespace Cccc
             Sync();
             hook.Start();
             updateTimer.Start();
-            trim.Start();
 
             lastSeq = Native.GetClipboardSequenceNumber();
             var now = ClipReader.Read();
@@ -146,7 +142,7 @@ namespace Cccc
                 if (now.Thumb != null) now.Thumb.Dispose();
             }
             if (updated) Notice(L.UpdatedTitle(Updater.Show(Updater.Current)), L.UpdatedSub);
-            else if (!silent) Notice(L.ReadyTitle, set.HideTray ? L.ReadyHiddenSub : L.ReadySub);
+            else if (!silent) Notice(L.ReadyTitle, L.ReadySub);
         }
 
         void SetLang(string lang)
@@ -169,7 +165,7 @@ namespace Cccc
             if (customize == null)
             {
                 customize = new Customize(set, Changed, ShowSample, ShowCapsSample, ShowWifiSample, ShowAudioSample, TestSound, wifi);
-                customize.Closed += delegate { customize = null; trim.Stop(); trim.Start(); };
+                customize.Closed += delegate { customize = null; };
             }
             customize.Show();
             customize.Activate();
@@ -357,13 +353,13 @@ namespace Cccc
             using (var bmp = Icons.Tray(size, Theme.TaskbarLight(), set.Paused)) trayHandle = bmp.GetHicon();
             tray.Icon = Icon.FromHandle(trayHandle);
             tray.Text = set.Paused ? L.TipPaused : L.Tip;
-            tray.Visible = !set.HideTray;
+            tray.Visible = true;
             if (old != IntPtr.Zero) Native.DestroyIcon(old);
         }
 
         void OnKey(int packed, uint seq)
         {
-            if ((packed & 0xFF) == KeyHook.Caps) { OnCaps(); return; }
+            if ((packed & 0xFF) == KeyHook.Caps) { OnCaps(seq != 0); return; }
             keyKind = packed & 0xFF;
             keyTick = Environment.TickCount;
             if ((packed & KeyHook.Passthrough) != 0 || set.Paused || !set.FailHint) return;
@@ -372,11 +368,13 @@ namespace Cccc
             failCheck.Start();
         }
 
-        void OnCaps()
+        // Injected toggles only track the state; they never show a card.
+        void OnCaps(bool injected)
         {
             bool on = Native.CapsLock();
             if (on == capsOn) return;
             capsOn = on;
+            if (injected) { Native.Debug("caps: skipped (injected)"); return; }
             if (!set.CapsHint || set.Paused) return;
             if (Native.UserBusy()) { Native.Debug("caps: skipped (busy)"); return; }
             capsCard.Show(new Content { Kind = Kind.Caps, Title = L.Caps, CapsOn = on }, false);

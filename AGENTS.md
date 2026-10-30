@@ -12,4 +12,5 @@
 - Windows debug log: run with `CCCC_DEBUG=1` → `%TEMP%\CCCC\debug.log`.
 
 # Rules
+- Never add an option to hide the tray icon (or run with no visible UI). It made antivirus flag CCCC as a keylogger.
 - Reply in precise and simple language. As simple as possible.

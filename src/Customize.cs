@@ -81,7 +81,7 @@ namespace Cccc
         readonly Button[] tiles = new Button[5];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay, chkWifi, chkWifiStay, chkAudio, chkAudioStay, chkTray;
+        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay, chkWifi, chkWifiStay, chkAudio, chkAudioStay;
         Picker pickMain, pickCaps;
         Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur, sldWifiDur, sldAudioDur;
         TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur, lblWifiDur, lblWifiNames, lblAudioDur;
@@ -174,7 +174,6 @@ namespace Cccc
             chkWarn.IsChecked = set.FailHint;
             chkCaps.IsChecked = set.CapsHint;
             chkStart.IsChecked = Settings.AutoStart;
-            chkTray.IsChecked = !set.HideTray;
             chkAuto.IsChecked = set.AutoUpdate;
             rbLang[set.Lang == "en" ? 1 : set.Lang == "zh" ? 2 : 0].IsChecked = true;
             rbTheme[set.ThemeMode].IsChecked = true;
@@ -539,11 +538,9 @@ namespace Cccc
             chkWarn = Toggle();
             chkStart = Toggle();
             chkAuto = Toggle();
-            chkTray = Toggle();
             BindToggle(chkPause, v => set.Paused = v);
             BindToggle(chkWarn, v => set.FailHint = v);
             BindToggle(chkStart, v => Settings.AutoStart = v);
-            BindToggle(chkTray, v => set.HideTray = !v);
             BindToggle(chkAuto, v => set.AutoUpdate = v);
             RadioButton[] lang;
             var langSeg = SegOf(new[] { L.LangSystem, "English", "中文" }, out lang);
@@ -566,7 +563,6 @@ namespace Cccc
                 // Ignored apps are rows inside their setting's card, not cards of their own.
                 Box(PageOf(CardGrid(L.IgnoreApps, L.HintIgnore, cmbIgnore), ignoreList)),
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
-                SettingCard(L.MenuTray, L.HintTray, chkTray),
                 SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
                 SettingCard(L.MenuLanguage, L.HintLanguage, langSeg),
                 SettingCard(L.SettingsFile, L.HintSettingsFile, fileButtons));
@@ -1433,7 +1429,6 @@ namespace Cccc
                 case "capsWidth": return sldCapsW;
                 case "capsDuration": return sldCapsDur;
                 case "capsStay": return chkCapsStay;
-                case "tray": return chkTray;
                 case "wifi": return chkWifi;
                 case "wifiDuration": return sldWifiDur;
                 case "wifiStay": return chkWifiStay;

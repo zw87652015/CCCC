@@ -321,14 +321,15 @@ namespace Cccc
             if (code >= 0)
             {
                 int msg = (int)wParam, vk = Marshal.ReadInt32(lParam);
+                bool injected = (Marshal.ReadInt32(lParam, 8) & 0x10) != 0;
+                // Remote-desktop agents (StarDesk etc.) inject Caps Lock around typed text to sync its state.
                 if (vk == 0x14 && (msg == 0x101 || msg == 0x105))
-                    Native.PostMessage(target, Native.WM_APP_KEY, (IntPtr)Caps, IntPtr.Zero);
+                    Native.PostMessage(target, Native.WM_APP_KEY, (IntPtr)Caps, (IntPtr)(injected ? 1 : 0));
                 else if (vk == 0x43 || vk == 0x58 || vk == 0x2D)
                 {
                     bool down = msg == 0x100 || msg == 0x104;
                     bool held = vk == 0x43 ? cHeld : vk == 0x58 ? xHeld : insHeld;
                     // Selection tools (translate/search bubbles) fake Ctrl+C, then restore the old clipboard.
-                    bool injected = (Marshal.ReadInt32(lParam, 8) & 0x10) != 0;
                     if (down && !held && !injected && Chord(vk)) Fire(vk == 0x58 ? CutKey : Copy);
                     if (vk == 0x43) cHeld = down; else if (vk == 0x58) xHeld = down; else insHeld = down;
                 }

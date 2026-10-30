@@ -101,14 +101,6 @@ namespace Cccc
         [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder sb, ref uint size);
         [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
-        [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
-        [DllImport("kernel32.dll")] static extern bool SetProcessWorkingSetSize(IntPtr process, IntPtr min, IntPtr max);
-
-        // Returns idle pages to the OS; the working set grows back on demand.
-        public static void TrimMemory()
-        {
-            SetProcessWorkingSetSize(GetCurrentProcess(), (IntPtr)(-1), (IntPtr)(-1));
-        }
         [DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr hmon, int type, out uint dpiX, out uint dpiY);
         [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
         [DllImport("dwmapi.dll")] public static extern int DwmFlush();

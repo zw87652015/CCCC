@@ -78,9 +78,6 @@ namespace Cccc
         // Raised when the user drags a Freedom card to a new spot (0-1000 within the work area).
         public event Action<int, int> Moved;
 
-        // Raised when the last visible card hides (the stack is empty again).
-        public static event Action AllHidden;
-
         // The name the tray-anchored card should anchor to (its tray button's name contains it).
         public string AnchorName;
 
@@ -585,7 +582,6 @@ namespace Cccc
             {
                 stackDY = stackTarget = 0;
                 Arrange();   // the rest glide back to their home spots
-                if (stack.Count == 0 && AllHidden != null) AllHidden();
             }
         }
 

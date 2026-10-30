@@ -18,7 +18,7 @@ namespace Cccc
 
         public bool Paused, Sound, FailHint = true, CapsHint = true, AutoUpdate = true, ShowSource = true, Simple;
         public bool FullPalette, StayUntilClicked, CapsStayUntilClicked, WifiHint, WifiStayUntilClicked;
-        public bool AudioHint = true, AudioStayUntilClicked, HideTray;
+        public bool AudioHint = true, AudioStayUntilClicked;
         public int WifiDurationMs = 4000, AudioDurationMs = 4000;
         public int SourceWhen = 1, SourceDetail = 1;
         public int ThemeMode, Palette, DurationMs = 1900, Position = 6, Scale = 100, TextScale = 100;
@@ -61,7 +61,6 @@ namespace Cccc
                 s.AudioHint = Flag(k, "AudioHint", s.AudioHint);
                 s.AudioStayUntilClicked = Flag(k, "AudioStayUntilClicked", s.AudioStayUntilClicked);
                 s.AudioDurationMs = Num(k, "AudioDurationMs", s.AudioDurationMs, 500, 10000);
-                s.HideTray = Flag(k, "HideTray", s.HideTray);
                 s.ThemeMode = Num(k, "ThemeMode", s.ThemeMode, 0, 2);
                 s.Palette = Num(k, "Palette", s.Palette, 0, 4);
                 s.DurationMs = Num(k, "DurationMs", s.DurationMs, 500, 10000);
@@ -121,7 +120,7 @@ namespace Cccc
                 k.SetValue("AudioHint", AudioHint ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("AudioStayUntilClicked", AudioStayUntilClicked ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("AudioDurationMs", AudioDurationMs, RegistryValueKind.DWord);
-                k.SetValue("HideTray", HideTray ? 1 : 0, RegistryValueKind.DWord);
+                k.DeleteValue("HideTray", false);
                 k.SetValue("ThemeMode", ThemeMode, RegistryValueKind.DWord);
                 k.SetValue("Palette", Palette, RegistryValueKind.DWord);
                 k.SetValue("DurationMs", DurationMs, RegistryValueKind.DWord);
@@ -169,7 +168,7 @@ namespace Cccc
         }
 
         // Per-machine state that a settings file never carries.
-        static readonly string[] NotPortable = { "Paused", "HideTray" };
+        static readonly string[] NotPortable = { "Paused" };
 
         static IEnumerable<FieldInfo> PortableFields()
         {

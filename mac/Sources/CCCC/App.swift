@@ -47,7 +47,10 @@ private let keyTapCallback: CGEventTapCallBack = { _, type, event, refcon in
     } else if type == .keyDown {
         app.handleKeyDown(event)
     } else if type == .flagsChanged {
-        app.handleCaps(event.flags.contains(.maskAlphaShift))
+        // Remote-desktop agents (StarDesk etc.) post Caps Lock around typed text to sync its state;
+        // only real hardware events come from the HID system state.
+        let injected = event.getIntegerValueField(.eventSourceStateID) != Int64(CGEventSourceStateID.hidSystemState.rawValue)
+        app.handleCaps(event.flags.contains(.maskAlphaShift), injected: injected)
     }
     return Unmanaged.passUnretained(event)
 }
@@ -565,11 +568,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // Fires only when the lock state actually flips; a short press that just switches input source does not.
-    fileprivate func handleCaps(_ on: Bool) {
+    // Injected toggles only track the state; they never show a card.
+    fileprivate func handleCaps(_ on: Bool, injected: Bool = false) {
         if on == capsOn { return }
         capsOn = on
-        dbg("caps: \(on ? "on" : "off")")
-        guard Prefs.capsHint, !Prefs.paused, !userBusy() else { return }
+        dbg("caps: \(on ? "on" : "off")\(injected ? " (injected, skipped)" : "")")
+        guard !injected, Prefs.capsHint, !Prefs.paused, !userBusy() else { return }
         let c = Content(kind: .caps, title: L.caps)
         c.capsOn = on
         present(c, repeat: false)

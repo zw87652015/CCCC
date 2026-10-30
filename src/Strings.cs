@@ -103,11 +103,8 @@ namespace Cccc
         public static string HintAudio { get { return T("Show a card near the tray when sound switches to another device", "声音切换到其他设备时在托盘附近弹出卡片"); } }
         public static string TabAudio { get { return T("Sound output", "声音输出"); } }
 
-        public static string ReadyHiddenSub { get { return T("Running in the background. Start CCCC.exe again for settings.", "正在后台运行。再次启动 CCCC.exe 可打开设置。"); } }
-        public static string MenuTray { get { return T("Show tray icon", "显示托盘图标"); } }
-        public static string HintTray { get { return T("Off: no icon. Start CCCC.exe again to open this window; end it in Task Manager to quit.", "关闭后不显示图标。再次启动 CCCC.exe 可打开此窗口；在任务管理器中结束它即可退出。"); } }
         public static string SettingsFile { get { return T("Settings file", "设置文件"); } }
-        public static string HintSettingsFile { get { return T("Export your settings to a file, or import a file from another computer. The tray icon and Pause stay as they are.", "把设置导出为文件，或导入另一台电脑导出的文件。托盘图标和暂停状态保持不变。"); } }
+        public static string HintSettingsFile { get { return T("Export your settings to a file, or import a file from another computer. Pause stays as it is.", "把设置导出为文件，或导入另一台电脑导出的文件。暂停状态保持不变。"); } }
         public static string Export { get { return T("Export…", "导出…"); } }
         public static string Import { get { return T("Import…", "导入…"); } }
         public static string ImportFailed { get { return T("Couldn't import this file.", "无法导入此文件。"); } }
