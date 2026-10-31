@@ -204,6 +204,7 @@ enum L {
     static var posSame: String { t("Same as copied card", "与复制卡片相同") }
     static var durationTitle: String { t("Show for", "停留时间") }
     static var stayUntilClicked: String { t("Stay until clicked", "直到点击才关闭") }
+    static var openLink: String { t("Open links on click", "点击打开链接") }
     static var playSounds: String { t("Play sounds", "播放提示音") }
     static var copiedSound: String { t("Copied sound", "复制成功音") }
     static var failSound: String { t("Nothing copied sound", "未复制成功音") }

@@ -205,6 +205,7 @@ namespace Cccc
         public static string HintFree { get { return T("Drag the card in the preview, or drag the card itself on screen", "拖动预览中的卡片，或直接拖动屏幕上的卡片"); } }
         public static string DurationTitle { get { return T("Show for", "停留时间"); } }
         public static string StayUntilClicked { get { return T("Stay until clicked", "直到点击才关闭"); } }
+        public static string OpenLink { get { return T("Open links on click", "点击打开链接"); } }
         public static string PlaySounds { get { return T("Play sounds", "播放提示音"); } }
         public static string CopiedSound { get { return T("Copied sound", "复制成功音"); } }
         public static string FailSound { get { return T("Nothing copied sound", "未复制成功音"); } }
@@ -242,6 +243,7 @@ namespace Cccc
         public static string HintPosition { get { return T("Where the card appears on screen", "卡片在屏幕上出现的位置"); } }
         public static string HintDuration { get { return T("How long the card stays", "卡片停留的时间"); } }
         public static string HintStay { get { return T("Keep the card until you click it", "卡片一直显示，直到点击"); } }
+        public static string HintOpenLink { get { return T("Click a card that holds only a web link to open it in your browser", "卡片内容只是一个网址时，点击卡片用默认浏览器打开"); } }
         public static string HintSound { get { return T("A short sound for copies and misses", "复制成功或失败时播放短音"); } }
         public static string HintSource { get { return T("Show which app the copy came from", "显示复制内容来自哪个应用"); } }
         public static string HintWhen { get { return T("When to show the source", "何时显示来源"); } }

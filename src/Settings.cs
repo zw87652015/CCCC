@@ -17,7 +17,7 @@ namespace Cccc
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
         public bool Paused, Sound, FailHint = true, CapsHint = true, AutoUpdate = true, ShowSource = true, Simple;
-        public bool FullPalette, StayUntilClicked, CapsStayUntilClicked, WifiHint, WifiStayUntilClicked;
+        public bool FullPalette, StayUntilClicked, OpenLinkOnClick, CapsStayUntilClicked, WifiHint, WifiStayUntilClicked;
         public bool AudioHint = true, AudioStayUntilClicked;
         public int WifiDurationMs = 4000, AudioDurationMs = 4000;
         public int SourceWhen = 1, SourceDetail = 1;
@@ -54,6 +54,7 @@ namespace Cccc
                 s.Lang = Choice(k, "Lang", s.Lang);
                 s.FullPalette = Flag(k, "FullPalette", s.FullPalette);
                 s.StayUntilClicked = Flag(k, "StayUntilClicked", s.StayUntilClicked);
+                s.OpenLinkOnClick = Flag(k, "OpenLinkOnClick", s.OpenLinkOnClick);
                 s.CapsStayUntilClicked = Flag(k, "CapsStayUntilClicked", s.CapsStayUntilClicked);
                 s.WifiHint = Flag(k, "WifiHint", s.WifiHint);
                 s.WifiStayUntilClicked = Flag(k, "WifiStayUntilClicked", s.WifiStayUntilClicked);
@@ -113,6 +114,7 @@ namespace Cccc
                 k.SetValue("Lang", Lang, RegistryValueKind.String);
                 k.SetValue("FullPalette", FullPalette ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("StayUntilClicked", StayUntilClicked ? 1 : 0, RegistryValueKind.DWord);
+                k.SetValue("OpenLinkOnClick", OpenLinkOnClick ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("CapsStayUntilClicked", CapsStayUntilClicked ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("WifiHint", WifiHint ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("WifiStayUntilClicked", WifiStayUntilClicked ? 1 : 0, RegistryValueKind.DWord);
@@ -155,7 +157,7 @@ namespace Cccc
         public void ResetDisplay()
         {
             ThemeMode = Palette = 0;
-            FullPalette = StayUntilClicked = CapsStayUntilClicked = WifiStayUntilClicked = Simple = false;
+            FullPalette = StayUntilClicked = OpenLinkOnClick = CapsStayUntilClicked = WifiStayUntilClicked = Simple = false;
             AudioStayUntilClicked = false;
             Transparency = 0;
             DurationMs = 1900; Position = 6; Scale = 100; TextScale = 100;

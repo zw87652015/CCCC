@@ -81,7 +81,7 @@ namespace Cccc
         readonly Button[] tiles = new Button[5];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkSimple, chkCapsStay, chkWifi, chkWifiStay, chkAudio, chkAudioStay;
+        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkOpenLink, chkSimple, chkCapsStay, chkWifi, chkWifiStay, chkAudio, chkAudioStay;
         Picker pickMain, pickCaps;
         Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur, sldWifiDur, sldAudioDur;
         TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur, lblWifiDur, lblWifiNames, lblAudioDur;
@@ -227,6 +227,7 @@ namespace Cccc
             pickMain.Sync();
             pickCaps.Sync();
             chkStay.IsChecked = set.StayUntilClicked;
+            chkOpenLink.IsChecked = set.OpenLinkOnClick;
             chkSound.IsChecked = set.Sound;
             ShowSound(soundOk);
             ShowSound(soundFail);
@@ -1153,13 +1154,16 @@ namespace Cccc
             var durRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldDur, lblDur } };
             chkStay = Toggle();
             BindToggle(chkStay, v => set.StayUntilClicked = v);
+            chkOpenLink = Toggle();
+            BindToggle(chkOpenLink, v => set.OpenLinkOnClick = v);
 
             return PageOf(
                 Header(L.PositionTitle),
                 new TextBlock { Text = L.HintPosition, Style = Res<Style>("RowHint"), Margin = new Thickness(0, 0, 0, 8) },
                 Box(pickMain.Body),
                 SettingCard(L.DurationTitle, L.HintDuration, durRow),
-                SettingCard(L.StayUntilClicked, L.HintStay, chkStay));
+                SettingCard(L.StayUntilClicked, L.HintStay, chkStay),
+                SettingCard(L.OpenLink, L.HintOpenLink, chkOpenLink));
         }
 
         // MARK: Caps Lock
@@ -1414,6 +1418,7 @@ namespace Cccc
                 case "sound": return chkSound;
                 case "source": return chkSource;
                 case "stay": return chkStay;
+                case "openLink": return chkOpenLink;
                 case "simple": return chkSimple;
                 case "trans": return sldTrans;
                 case "full": return chkFull;

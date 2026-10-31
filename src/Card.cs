@@ -22,7 +22,7 @@ namespace Cccc
         public bool CutHint, Secret, SrcLine, CapsOn, Muted;
         public int Glyph;   // audio card: 0 speaker, 1 headphones, 2 no output
         public int Count = 1;
-        public string Site;
+        public string Site, Url;
         public Bitmap SrcIcon;
         public string SrcText = "";
     }
@@ -31,6 +31,7 @@ namespace Cccc
     {
         public const float CX = 24, CY = 20;
         const float Edge = 16;
+        static readonly IntPtr arrow = Native.LoadCursor(IntPtr.Zero, (IntPtr)Native.IDC_ARROW);
         float R { get { return th.Radius; } }
 
         public float W, H, Line, HMax, CanvasW, CanvasH;
@@ -113,14 +114,23 @@ namespace Cccc
         {
             if (m.Msg == Native.WM_APP_FRAME) { vsync.Done(); if (shown) Frame(); return; }
             if (m.Msg == Native.WM_MOUSEACTIVATE) { m.Result = (IntPtr)Native.MA_NOACTIVATE; return; }
+            if (m.Msg == Native.WM_SETCURSOR) { Native.SetCursor(arrow); m.Result = (IntPtr)1; return; }
             if (!Tray && Pos == 10 && shown)
             {
                 if (m.Msg == Native.WM_LBUTTONDOWN) { BeginDrag(); return; }
                 if (m.Msg == Native.WM_MOUSEMOVE && drag) { DragMove(); return; }
                 if (m.Msg == Native.WM_LBUTTONUP && drag) { EndDrag(); return; }
             }
-            if (m.Msg == Native.WM_LBUTTONUP || m.Msg == Native.WM_RBUTTONUP) { visTarget = 0; return; }
+            if (m.Msg == Native.WM_LBUTTONUP) { Click(); return; }
+            if (m.Msg == Native.WM_RBUTTONUP) { visTarget = 0; return; }
             base.WndProc(ref m);
+        }
+
+        void Click()
+        {
+            if (visTarget > 0 && st.OpenLinkOnClick && cur != null && cur.Url != null && (cur.Kind == Kind.Copied || cur.Kind == Kind.Cut))
+                try { Process.Start(new ProcessStartInfo(cur.Url) { UseShellExecute = true }); } catch (Exception) { }
+            visTarget = 0;
         }
 
         void BeginDrag()
@@ -168,7 +178,7 @@ namespace Cccc
                 if (Moved != null) Moved(fx, fy);
                 deadline = (caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : Now + duration;
             }
-            else visTarget = 0;
+            else Click();
         }
 
         // Inverse of Place for a dropped card: returns 0-1000 along each axis of the work area.
@@ -806,9 +816,26 @@ namespace Cccc
             }
         }
 
+        bool OpenIcon { get { return st.OpenLinkOnClick && cur.Url != null && (cur.Kind == Kind.Copied || cur.Kind == Kind.Cut); } }
+
+        void DrawOpenIcon(Graphics g, float right, float alpha, Color accent)
+        {
+            float d = 22 * k, x = right - d, y = Top + (CardH - d) / 2, cx = x + d / 2, cy = y + d / 2;
+            using (var b = new SolidBrush(Color.FromArgb((int)((th.Dark ? 48 : 34) * alpha), accent)))
+                g.FillEllipse(b, x, y, d, d);
+            using (var pen = new Pen(Color.FromArgb((int)(255 * alpha), accent), 1.4f * k) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+            {
+                g.DrawLines(pen, new[] { new PointF(cx + k, cy - 4 * k), new PointF(cx - 5 * k, cy - 4 * k), new PointF(cx - 5 * k, cy + 5 * k),
+                    new PointF(cx + 4 * k, cy + 5 * k), new PointF(cx + 4 * k, cy - k) });
+                g.DrawLine(pen, cx - 0.5f * k, cy + 0.5f * k, cx + 4.5f * k, cy - 4.5f * k);
+                g.DrawLines(pen, new[] { new PointF(cx + 1.5f * k, cy - 4.5f * k), new PointF(cx + 4.5f * k, cy - 4.5f * k), new PointF(cx + 4.5f * k, cy - 1.5f * k) });
+            }
+        }
+
         void DrawText(Graphics g, double now, Color accent)
         {
             float right = CX + W - 14;
+            float ta = (float)Ease.OutCubic((now - tText) / 0.26);
 
             if (cur.Kind == Kind.Caps)
             {
@@ -836,8 +863,10 @@ namespace Cccc
                 // One-line card: just the title next to the status icon.
                 float sa = (float)Ease.OutCubic((now - tText) / 0.26);
                 float sl = (float)Ease.OutCubic((now - tTitle) / 0.28);
+                float sw = W - 72;
+                if (OpenIcon) { DrawOpenIcon(g, right, sa, accent); sw -= 22 * k + 10; }
                 using (var b = new SolidBrush(Color.FromArgb((int)(255 * sa * sl), th.Title)))
-                    g.DrawString(cur.Title, fTitle, b, new RectangleF(CX + 58 + 6 * (1 - sa), Top + (CardH - 22 * k) / 2, W - 72, 22 * k), fmt);
+                    g.DrawString(cur.Title, fTitle, b, new RectangleF(CX + 58 + 6 * (1 - sa), Top + (CardH - 22 * k) / 2, sw, 22 * k), fmt);
                 return;
             }
 
@@ -855,6 +884,8 @@ namespace Cccc
                 }
                 right = tr.Left - 10;
             }
+
+            if (OpenIcon) { DrawOpenIcon(g, right, ta, accent); right -= 22 * k + 10; }
 
             if (cur.Count >= 2)
             {
@@ -877,7 +908,6 @@ namespace Cccc
                 right = bx - 10;
             }
 
-            float ta = (float)Ease.OutCubic((now - tText) / 0.26);
             float la = (float)Ease.OutCubic((now - tTitle) / 0.28);
             float tx = CX + 58 + 6 * (1 - ta);
             float maxW = Math.Max(10, right - tx);

@@ -156,17 +156,46 @@ namespace Cccc
             catch (Exception) { return -1; }
         }
 
+        static readonly string[] LinkTlds = { "com", "net", "org", "edu", "gov", "info", "biz", "io", "co", "dev", "ai", "me", "tv", "xyz", "top", "cn", "uk", "de", "jp", "fr", "ru", "kr", "in", "au", "ca", "us", "eu", "hk", "tw", "sg", "nl", "se", "ch", "es", "it", "br", "mx" };
+
+        // The absolute URL when a single-line text is a web link (explicit http/https, or a bare host such as example.com), else null.
+        static string WebUrl(string s)
+        {
+            if (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || s.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                Uri u;
+                return Uri.TryCreate(s, UriKind.Absolute, out u) && (u.Scheme == "http" || u.Scheme == "https") ? u.AbsoluteUri : null;
+            }
+            if (s.Contains("://") || s.IndexOf('@') >= 0 || s.IndexOf('\\') >= 0) return null;
+
+            string host = s.Split(new[] { '/', '?', '#' })[0];
+            int colon = host.LastIndexOf(':');
+            if (colon >= 0 && colon < host.Length - 1 && Array.TrueForAll(host.Substring(colon + 1).ToCharArray(), d => char.IsDigit(d))) host = host.Substring(0, colon);
+
+            string[] labels = host.Split('.');
+            if (labels.Length < 2) return null;
+            foreach (string label in labels)
+                if (label.Length == 0 || label[0] == '-' || label[label.Length - 1] == '-'
+                    || !Array.TrueForAll(label.ToCharArray(), ch => char.IsLetterOrDigit(ch) || ch == '-')) return null;
+            if (!host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) && Array.IndexOf(LinkTlds, labels[labels.Length - 1]) < 0) return null;
+
+            Uri v;
+            return Uri.TryCreate("https://" + s, UriKind.Absolute, out v) ? v.AbsoluteUri : null;
+        }
+
         static void Text(Content c, string t)
         {
             string trimmed = t.Trim();
             int lines = 1;
             foreach (char ch in trimmed) if (ch == '\n') lines++;
 
-            Uri u;
-            if (lines == 1 && trimmed.IndexOf(' ') < 0 && Uri.TryCreate(trimmed, UriKind.Absolute, out u) && (u.Scheme == "http" || u.Scheme == "https"))
+            string url = lines == 1 && trimmed.IndexOf(' ') < 0 ? WebUrl(trimmed) : null;
+            if (url != null)
             {
+                int at = trimmed.IndexOf("://");
                 c.Meta = L.Link;
-                c.Sub = Flatten(trimmed.Substring(u.Scheme.Length + 3));
+                c.Url = url;
+                c.Sub = Flatten(at < 0 ? trimmed : trimmed.Substring(at + 3));
             }
             else
             {

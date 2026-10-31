@@ -11,7 +11,7 @@ final class Content {
     var thumb: CGImage?
     var count: Int
     var quiet = false
-    var site: String?, sourceBundle: String?
+    var site: String?, sourceBundle: String?, url: URL?
     var remote = false, secret = false, capsOn = false
     var srcIcon: CGImage?
     var srcText = ""
@@ -46,7 +46,7 @@ final class CardView: NSView {
         card.render(ctx, now: card.renderNow)
     }
 
-    override func mouseUp(with event: NSEvent) { card?.visTarget = 0 }
+    override func mouseUp(with event: NSEvent) { card?.click() }
     override func rightMouseUp(with event: NSEvent) { card?.visTarget = 0 }
 }
 
@@ -330,6 +330,13 @@ final class Card {
         let tm = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in self?.frame() }
         RunLoop.main.add(tm, forMode: .common)
         timer = tm
+    }
+
+    func click() {
+        if visTarget > 0, Prefs.openLinkOnClick, let c = cur, c.kind == .copied || c.kind == .cut, let u = c.url {
+            NSWorkspace.shared.open(u)
+        }
+        visTarget = 0
     }
 
     // Renders a frozen moment `age` seconds after an event, for the design sheet and the settings preview.
@@ -727,8 +734,34 @@ final class Card {
         ctx.strokePath()
     }
 
+    private func drawOpenIcon(_ ctx: CGContext, right: CGFloat, alpha: CGFloat, accent: NSColor) {
+        let d: CGFloat = 22 * k
+        let x = right - d, y = cardTop + (cardH - d) / 2
+        let cx = x + d / 2, cy = y + d / 2
+        ctx.setFillColor(accent.withAlphaComponent((th.dark ? 48 : 34) / 255 * alpha).cgColor)
+        ctx.fillEllipse(in: CGRect(x: x, y: y, width: d, height: d))
+        ctx.setStrokeColor(accent.withAlphaComponent(alpha).cgColor)
+        ctx.setLineWidth(1.4 * k)
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        ctx.beginPath()
+        ctx.move(to: CGPoint(x: cx + k, y: cy - 4 * k))
+        ctx.addLine(to: CGPoint(x: cx - 5 * k, y: cy - 4 * k))
+        ctx.addLine(to: CGPoint(x: cx - 5 * k, y: cy + 5 * k))
+        ctx.addLine(to: CGPoint(x: cx + 4 * k, y: cy + 5 * k))
+        ctx.addLine(to: CGPoint(x: cx + 4 * k, y: cy - k))
+        ctx.move(to: CGPoint(x: cx - 0.5 * k, y: cy + 0.5 * k))
+        ctx.addLine(to: CGPoint(x: cx + 4.5 * k, y: cy - 4.5 * k))
+        ctx.move(to: CGPoint(x: cx + 1.5 * k, y: cy - 4.5 * k))
+        ctx.addLine(to: CGPoint(x: cx + 4.5 * k, y: cy - 4.5 * k))
+        ctx.addLine(to: CGPoint(x: cx + 4.5 * k, y: cy - 1.5 * k))
+        ctx.strokePath()
+    }
+
     private func drawText(_ ctx: CGContext, _ c: Content, now t: Double, accent: NSColor) {
         var right = Card.CX + W - 14
+        let showOpen = Prefs.openLinkOnClick && c.url != nil && (c.kind == .copied || c.kind == .cut)
+        let ta = CGFloat(Ease.outCubic((t - tText) / 0.26))
 
         if c.kind == .caps {
             let ta = CGFloat(Ease.outCubic((t - tText) / 0.26))
@@ -752,7 +785,9 @@ final class Card {
             let ta = CGFloat(Ease.outCubic((t - tText) / 0.26))
             let la = CGFloat(Ease.outCubic((t - tTitle) / 0.28))
             let tx = Card.CX + 58 + 6 * (1 - ta)
-            drawLine(c.title, fTitle, th.title.withAlphaComponent(ta * la), x: tx, y: cardTop + (cardH - 22 * k) / 2, w: W - 72, h: 22 * k)
+            var sw = W - 72
+            if showOpen { drawOpenIcon(ctx, right: right, alpha: ta, accent: accent); sw -= 22 * k + 10 }
+            drawLine(c.title, fTitle, th.title.withAlphaComponent(ta * la), x: tx, y: cardTop + (cardH - 22 * k) / 2, w: sw, h: 22 * k)
             return
         }
 
@@ -768,6 +803,11 @@ final class Card {
             ctx.addPath(Shapes.roundRect(tr, 8))
             ctx.strokePath()
             right = tr.minX - 10
+        }
+
+        if showOpen {
+            drawOpenIcon(ctx, right: right, alpha: ta, accent: accent)
+            right -= 22 * k + 10
         }
 
         if c.count >= 2 {
@@ -791,7 +831,6 @@ final class Card {
             right = bx - 10
         }
 
-        let ta = CGFloat(Ease.outCubic((t - tText) / 0.26))
         let la = CGFloat(Ease.outCubic((t - tTitle) / 0.28))
         let tx = Card.CX + 58 + 6 * (1 - ta)
         let maxW = max(10, right - tx)

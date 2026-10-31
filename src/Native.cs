@@ -9,7 +9,8 @@ namespace Cccc
         public const int WM_CLIPBOARDUPDATE = 0x031D;
         public const int WM_MOUSEACTIVATE = 0x0021;
         public const int WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONUP = 0x0205;
-        public const int WM_MOUSEMOVE = 0x0200;
+        public const int WM_MOUSEMOVE = 0x0200, WM_SETCURSOR = 0x0020;
+        public const int IDC_ARROW = 32512;
         public const int WM_APP_KEY = 0x8001, WM_APP_FRAME = 0x8002;
         public const int MA_NOACTIVATE = 3;
         public const int WS_POPUP = unchecked((int)0x80000000);
@@ -68,6 +69,8 @@ namespace Cccc
         [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hwnd, int index);
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT pt);
+        [DllImport("user32.dll")] public static extern IntPtr SetCursor(IntPtr cursor);
+        [DllImport("user32.dll")] public static extern IntPtr LoadCursor(IntPtr instance, IntPtr name);
         [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT pt, uint flags);
         [DllImport("user32.dll")] public static extern IntPtr SetCapture(IntPtr hwnd);

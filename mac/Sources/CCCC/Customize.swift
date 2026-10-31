@@ -65,7 +65,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private var fontFamilies: [String] = []
 
     private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
-    private var chkFull: NSButton!, chkStay: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!, chkCapsStay: NSButton!
+    private var chkFull: NSButton!, chkStay: NSButton!, chkOpenLink: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!, chkCapsStay: NSButton!
     private var chkWifi: NSButton!, chkWifiStay: NSButton!, sldWifiDuration: NSSlider!, lblWifiDuration: NSTextField!, lblWifiNames: NSTextField!
     private var chkAudio: NSButton!, chkAudioStay: NSButton!, sldAudioDuration: NSSlider!, lblAudioDuration: NSTextField!
     private var popLang: NSPopUpButton!, popTheme: NSPopUpButton!, popPalette: NSPopUpButton!, popFont: NSPopUpButton!
@@ -538,7 +538,8 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         chkStay = check(L.stayUntilClicked) { c in Prefs.stayUntilClicked = Customize.isOn(c) }
         sldDuration = slider(5, 100) { c in Prefs.durationMs = Int(round((c as! NSSlider).doubleValue)) * 100 }
         lblDuration = NSTextField(labelWithString: "")
-        return page([box, chkStay, row(L.durationTitle, [sldDuration, lblDuration])])
+        chkOpenLink = check(L.openLink) { c in Prefs.openLinkOnClick = Customize.isOn(c) }
+        return page([box, chkStay, row(L.durationTitle, [sldDuration, lblDuration]), chkOpenLink])
     }
 
     private func soundPage() -> NSView {
@@ -708,6 +709,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         sldDuration.doubleValue = Double(Prefs.durationMs / 100)
         sldDuration.isEnabled = !Prefs.stayUntilClicked
         chkStay.state = Prefs.stayUntilClicked ? .on : .off
+        chkOpenLink.state = Prefs.openLinkOnClick ? .on : .off
         sldCapsDuration.doubleValue = Double(Prefs.capsDurationMs) / 100
         sldCapsDuration.isEnabled = !Prefs.capsStayUntilClicked
         chkCapsStay.state = Prefs.capsStayUntilClicked ? .on : .off

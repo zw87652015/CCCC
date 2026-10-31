@@ -130,13 +130,38 @@ enum ClipReader {
         return n.isEmpty ? path : n
     }
 
+    private static let linkTlds: Set<String> = ["com", "net", "org", "edu", "gov", "info", "biz", "io", "co", "dev", "ai", "me", "tv", "xyz", "top", "cn", "uk", "de", "jp", "fr", "ru", "kr", "in", "au", "ca", "us", "eu", "hk", "tw", "sg", "nl", "se", "ch", "es", "it", "br", "mx"]
+
+    // The absolute URL when a single-line text is a web link (explicit http/https, or a bare host such as example.com), else nil.
+    private static func webURL(_ s: String) -> URL? {
+        if s.lowercased().hasPrefix("http://") || s.lowercased().hasPrefix("https://") {
+            guard let u = URL(string: s), let scheme = u.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
+            return u
+        }
+        if s.contains("://") || s.contains("@") || s.contains("\\") { return nil }
+
+        var host = String(s.prefix(while: { $0 != "/" && $0 != "?" && $0 != "#" }))
+        if let colon = host.lastIndex(of: ":"), colon < host.index(before: host.endIndex) {
+            let port = host[host.index(after: colon)...]
+            if port.allSatisfy({ $0.isNumber }) { host = String(host[..<colon]) }
+        }
+
+        let labels = host.components(separatedBy: ".")
+        guard labels.count >= 2 else { return nil }
+        for label in labels {
+            if label.isEmpty || label.first == "-" || label.last == "-" || !label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) { return nil }
+        }
+        if !host.lowercased().hasPrefix("www."), !linkTlds.contains(labels[labels.count - 1]) { return nil }
+        return URL(string: "https://" + s)
+    }
+
     private static func fillText(_ c: Content, _ t: String) {
         let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
         let lines = 1 + trimmed.filter { $0 == "\n" }.count
-        if lines == 1, !trimmed.contains(" "), let u = URL(string: trimmed), let scheme = u.scheme?.lowercased(),
-           scheme == "http" || scheme == "https" {
+        if lines == 1, !trimmed.contains(" "), let u = webURL(trimmed) {
             c.meta = L.link
-            c.sub = flatten(String(trimmed.dropFirst(scheme.count + 3)))
+            c.url = u
+            c.sub = flatten(trimmed.range(of: "://").map { String(trimmed[$0.upperBound...]) } ?? trimmed)
         } else {
             c.meta = lines > 1 ? L.lines(lines) : L.chars(t.utf16.count)
             c.sub = trimmed.isEmpty ? L.blank : flatten(trimmed)

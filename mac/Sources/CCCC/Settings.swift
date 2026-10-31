@@ -92,6 +92,10 @@ enum Prefs {
         get { d.bool(forKey: "StayUntilClicked") }
         set { d.set(newValue, forKey: "StayUntilClicked") }
     }
+    static var openLinkOnClick: Bool {
+        get { d.bool(forKey: "OpenLinkOnClick") }
+        set { d.set(newValue, forKey: "OpenLinkOnClick") }
+    }
     static var capsDurationMs: Int {
         get { range("CapsDurationMs", 2600, 500, 10000) }
         set { d.set(newValue, forKey: "CapsDurationMs") }
@@ -183,7 +187,7 @@ enum Prefs {
     static func resetDisplay() {
         themeMode = 0; palette = 0; fullPalette = false
         okColor = nil; warnColor = nil; bgColor = nil; borderColor = nil; titleColor = nil; subColor = nil; metaColor = nil
-        durationMs = 1900; stayUntilClicked = false; position = 6; scale = 100; textScale = 100
+        durationMs = 1900; stayUntilClicked = false; openLinkOnClick = false; position = 6; scale = 100; textScale = 100
         capsDurationMs = 2600; capsStayUntilClicked = false
         wifiDurationMs = 4000; wifiStayUntilClicked = false
         audioDurationMs = 4000; audioStayUntilClicked = false
@@ -197,7 +201,7 @@ enum Prefs {
     private enum Field { case flag, number, text, list }
     private static let portable: [(String, Field)] = [
         ("Sound", .flag), ("FailHint", .flag), ("CapsHint", .flag), ("AutoUpdate", .flag), ("ShowSource", .flag),
-        ("Simple", .flag), ("FullPalette", .flag), ("StayUntilClicked", .flag), ("CapsStayUntilClicked", .flag),
+        ("Simple", .flag), ("FullPalette", .flag), ("StayUntilClicked", .flag), ("OpenLinkOnClick", .flag), ("CapsStayUntilClicked", .flag),
         ("WifiHint", .flag), ("WifiStayUntilClicked", .flag), ("AudioHint", .flag), ("AudioStayUntilClicked", .flag),
         ("SourceWhen", .number), ("SourceDetail", .number), ("ThemeMode", .number), ("Palette", .number),
         ("DurationMs", .number), ("CapsDurationMs", .number), ("WifiDurationMs", .number), ("AudioDurationMs", .number),
