@@ -81,7 +81,7 @@ namespace Cccc
         readonly Button[] tiles = new Button[5];
         readonly RadioButton[] rbDetail = new RadioButton[4];
         RadioButton[] rbLang, rbTheme, rbWhen;
-        CheckBox chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkOpenLink, chkSimple, chkCapsStay, chkWifi, chkWifiStay, chkAudio, chkAudioStay;
+        CheckBox chkNearClickThrough, chkPause, chkWarn, chkCaps, chkStart, chkAuto, chkSound, chkSource, chkFull, chkStay, chkOpenLink, chkSimple, chkCapsStay, chkWifi, chkWifiStay, chkAudio, chkAudioStay;
         Picker pickMain, pickCaps;
         Slider sldSize, sldText, sldDur, sldTrans, sldCapsW, sldCapsH, sldCapsDur, sldWifiDur, sldAudioDur;
         TextBlock lblSize, lblText, lblDur, lblTrans, lblCapsW, lblCapsH, lblCapsDur, lblWifiDur, lblWifiNames, lblAudioDur;
@@ -230,6 +230,7 @@ namespace Cccc
             pickCaps.Sync();
             chkStay.IsChecked = set.StayUntilClicked;
             chkOpenLink.IsChecked = set.OpenLinkOnClick;
+            chkNearClickThrough.IsChecked = set.NearPointerClickThrough;
             chkSound.IsChecked = set.Sound;
             ShowSound(soundOk);
             ShowSound(soundFail);
@@ -257,7 +258,7 @@ namespace Cccc
         {
             return string.Join("|", new object[] { s.ThemeMode, s.Palette, s.OkColor, s.BgColor, s.BorderColor, s.TitleColor,
                 s.SubColor, s.MetaColor, s.FullPalette, s.FontFamily, s.Scale, s.TextScale, s.Position, s.FreeX, s.FreeY,
-                s.DurationMs, s.StayUntilClicked, s.ShowSource, s.SourceWhen, s.SourceDetail, s.Simple, s.Transparency, s.Lang });
+                s.NearPointerClickThrough, s.DurationMs, s.StayUntilClicked, s.ShowSource, s.SourceWhen, s.SourceDetail, s.Simple, s.Transparency, s.Lang });
         }
 
         static string SigFailed(Settings s) { return s.WarnColor + "|" + s.FailHint; }
@@ -1154,6 +1155,8 @@ namespace Cccc
             sldDur = Slide(500, 10000, 500, v => set.DurationMs = v);
             lblDur = new TextBlock { Style = Res<Style>("ValueText"), Width = 60, Margin = new Thickness(10, 0, 0, 0) };
             var durRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { sldDur, lblDur } };
+            chkNearClickThrough = Toggle();
+            BindToggle(chkNearClickThrough, v => set.NearPointerClickThrough = v);
             chkStay = Toggle();
             BindToggle(chkStay, v => set.StayUntilClicked = v);
             chkOpenLink = Toggle();
@@ -1164,6 +1167,7 @@ namespace Cccc
                 new TextBlock { Text = L.HintPosition, Style = Res<Style>("RowHint"), Margin = new Thickness(0, 0, 0, 8) },
                 Box(pickMain.Body),
                 SettingCard(L.DurationTitle, L.HintDuration, durRow),
+                SettingCard(L.NearClickThrough, L.HintNearClickThrough, chkNearClickThrough),
                 SettingCard(L.StayUntilClicked, L.HintStay, chkStay),
                 SettingCard(L.OpenLink, L.HintOpenLink, chkOpenLink));
         }

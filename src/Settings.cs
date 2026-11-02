@@ -26,6 +26,7 @@ namespace Cccc
         public int ThemeMode, Palette, DurationMs = 1900, Position = 6, Scale = 100, TextScale = 100;
         public int FreeX = 500, FreeY = 900, Transparency;
         public int CapsPosition = -1, CapsFreeX = 500, CapsFreeY = 900, CapsWidth = 200, CapsHeight = 40, CapsDurationMs = 2600;
+        public bool NearPointerClickThrough;
         public string Lang = "auto";
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
@@ -46,6 +47,7 @@ namespace Cccc
             {
                 if (k == null) return s;
                 s.Paused = Flag(k, "Paused", s.Paused);
+                s.NearPointerClickThrough = Flag(k, "NearPointerClickThrough", s.NearPointerClickThrough);
                 s.Sound = Flag(k, "Sound", s.Sound);
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
                 s.CapsHint = Flag(k, "CapsHint", s.CapsHint);
@@ -106,6 +108,7 @@ namespace Cccc
             using (var k = Registry.CurrentUser.CreateSubKey(Key))
             {
                 k.SetValue("Paused", Paused ? 1 : 0, RegistryValueKind.DWord);
+                k.SetValue("NearPointerClickThrough", NearPointerClickThrough ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("CapsHint", CapsHint ? 1 : 0, RegistryValueKind.DWord);
@@ -159,7 +162,7 @@ namespace Cccc
         public void ResetDisplay()
         {
             ThemeMode = Palette = 0;
-            FullPalette = StayUntilClicked = OpenLinkOnClick = CapsStayUntilClicked = WifiStayUntilClicked = Simple = false;
+            NearPointerClickThrough = FullPalette = StayUntilClicked = OpenLinkOnClick = CapsStayUntilClicked = WifiStayUntilClicked = Simple = false;
             AudioStayUntilClicked = false;
             Transparency = 0;
             DurationMs = 1900; Position = 6; Scale = 100; TextScale = 100;

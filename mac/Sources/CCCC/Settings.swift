@@ -8,6 +8,10 @@ struct SettingsFileError: LocalizedError {
 enum Prefs {
     private static let d = UserDefaults.standard
 
+    static var nearPointerClickThrough: Bool {
+        get { d.bool(forKey: "NearPointerClickThrough") }
+        set { d.set(newValue, forKey: "NearPointerClickThrough") }
+    }
     static var paused: Bool {
         get { d.bool(forKey: "Paused") }
         set { d.set(newValue, forKey: "Paused") }
@@ -185,6 +189,7 @@ enum Prefs {
     }
 
     static func resetDisplay() {
+        nearPointerClickThrough = false
         themeMode = 0; palette = 0; fullPalette = false
         okColor = nil; warnColor = nil; bgColor = nil; borderColor = nil; titleColor = nil; subColor = nil; metaColor = nil
         durationMs = 1900; stayUntilClicked = false; openLinkOnClick = false; position = 6; scale = 100; textScale = 100
@@ -201,7 +206,7 @@ enum Prefs {
     private enum Field { case flag, number, text, list }
     private static let portable: [(String, Field)] = [
         ("Sound", .flag), ("FailHint", .flag), ("CapsHint", .flag), ("AutoUpdate", .flag), ("ShowSource", .flag),
-        ("Simple", .flag), ("FullPalette", .flag), ("StayUntilClicked", .flag), ("OpenLinkOnClick", .flag), ("CapsStayUntilClicked", .flag),
+        ("NearPointerClickThrough", .flag), ("Simple", .flag), ("FullPalette", .flag), ("StayUntilClicked", .flag), ("OpenLinkOnClick", .flag), ("CapsStayUntilClicked", .flag),
         ("WifiHint", .flag), ("WifiStayUntilClicked", .flag), ("AudioHint", .flag), ("AudioStayUntilClicked", .flag),
         ("SourceWhen", .number), ("SourceDetail", .number), ("ThemeMode", .number), ("Palette", .number),
         ("DurationMs", .number), ("CapsDurationMs", .number), ("WifiDurationMs", .number), ("AudioDurationMs", .number),

@@ -135,6 +135,8 @@ final class Card {
 
     // Rebuilds metrics and fonts only when their inputs change; theme settings re-resolve only the theme.
     func apply() {
+        panel.ignoresMouseEvents = Prefs.nearPointerClickThrough && !defaults && !tray && pos == 9
+        if panel.ignoresMouseEvents && deadline.isInfinite { deadline = now + duration }
         let pct = defaults ? 100 : Prefs.textScale
         let family = defaults ? nil : Prefs.fontFamily
         let simple = !defaults && Prefs.simple
@@ -312,7 +314,7 @@ final class Card {
         if c.kind == .fail { tShake = t }
         let info = c.kind == .info || c.kind == .empty
         duration = Double(shownMs + (info && !tray && !caps ? 700 : 0)) / 1000
-        deadline = stayUntilClicked ? .infinity : t + duration
+        deadline = stayUntilClicked && !panel.ignoresMouseEvents ? .infinity : t + duration
         visTarget = 1
 
         if !fresh {
@@ -443,7 +445,7 @@ final class Card {
 
         let inCard = cursorInCard()
         if !inCard { hoverArmed = true }
-        if visTarget > 0 && hoverArmed && inCard { deadline = max(deadline, t + 0.8) }
+        if !panel.ignoresMouseEvents && visTarget > 0 && hoverArmed && inCard { deadline = max(deadline, t + 0.8) }
         if visTarget > 0 && t >= deadline { visTarget = 0 }
 
         vis = visTarget > vis ? min(1, vis + dt / 0.34) : max(0, vis - dt / 0.26)
@@ -541,7 +543,7 @@ final class Card {
         }
 
         let remain = Ease.clamp01((deadline - t) / duration)
-        if visTarget > 0 && remain > 0 && !stayUntilClicked {
+        if visTarget > 0 && remain > 0 && (!stayUntilClicked || panel.ignoresMouseEvents) {
             let x0 = Card.CX + rad, x1 = Card.CX + W - rad, y = cardTop + cardH - 3
             ctx.setStrokeColor(accent.withAlphaComponent(th.dark ? 70 / 255 : 60 / 255).cgColor)
             ctx.setLineWidth(2)
@@ -760,7 +762,7 @@ final class Card {
 
     private func drawText(_ ctx: CGContext, _ c: Content, now t: Double, accent: NSColor) {
         var right = Card.CX + W - 14
-        let showOpen = Prefs.openLinkOnClick && c.url != nil && (c.kind == .copied || c.kind == .cut)
+        let showOpen = !panel.ignoresMouseEvents && Prefs.openLinkOnClick && c.url != nil && (c.kind == .copied || c.kind == .cut)
         let ta = CGFloat(Ease.outCubic((t - tText) / 0.26))
 
         if c.kind == .caps {
