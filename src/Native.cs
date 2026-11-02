@@ -68,6 +68,7 @@ namespace Cccc
         [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
         [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hwnd, int index);
+        [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hwnd, int index, int value);
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT pt);
         [DllImport("user32.dll")] public static extern IntPtr SetCursor(IntPtr cursor);
         [DllImport("user32.dll")] public static extern IntPtr LoadCursor(IntPtr instance, IntPtr name);

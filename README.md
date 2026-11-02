@@ -1,5 +1,20 @@
 Let's Ctrl+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
+## 鼠标附近时点击穿透 / Near-pointer click-through
+
+在 **自定义 → 行为 → 鼠标附近时点击穿透** 中开启或关闭，默认开启。
+仅在复制／大写锁定提醒的位置为“鼠标附近”时生效，点击和滚轮交给下方应用。
+开启后提醒按设置时长自动关闭，悬停不延长，也不响应点击关闭或打开链接；
+“直到点击才关闭”在此模式下暂不生效。关闭穿透可恢复原有交互，其他位置与托盘提醒不受影响。
+
+**Customize → Behavior → Click through near-pointer cards** (on by default) lets mouse
+input reach the app underneath copy/Caps Lock cards placed near the pointer. These cards
+expire after the configured duration even if “Stay until clicked” is enabled; hovering
+does not extend them and clicks do not dismiss them or open links. Switch this option off
+to restore interactions. Other positions and tray-anchored notifications stay interactive.
+
+Windows regression checks: `./test-click-through.ps1` (isolated preferences and OS window hit testing).
+
 ![alt text](image.png)
 
 ## 简易模式与透明度 / Simple mode and transparency

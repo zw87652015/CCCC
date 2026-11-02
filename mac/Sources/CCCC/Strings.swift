@@ -109,6 +109,8 @@ enum L {
     static var importFailed: String { t("Couldn't import this file.", "无法导入此文件。") }
     static var exportFailed: String { t("Couldn't export settings.", "无法导出设置。") }
 
+    static var nearClickThrough: String { t("Click through near-pointer cards", "鼠标附近时点击穿透") }
+    static var hintNearClickThrough: String { t("Clicks reach the app underneath. Uses timed dismissal instead of hover or click actions. Applies to copy and Caps Lock cards near the pointer.", "点击直接传给下方应用，按时长关闭，不响应悬停或点击操作。适用于鼠标附近的复制和大写锁定提醒。") }
     static var menuShow: String { t("Show clipboard", "查看剪贴板") }
     static var menuPause: String { t("Pause", "暂停") }
     static var menuSound: String { t("Sound", "提示音") }

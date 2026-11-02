@@ -83,6 +83,18 @@ namespace Cccc
         public string AnchorName;
 
         bool Tray { get { return role == Role.Wifi || role == Role.Audio; } }
+        // Layered windows with WS_EX_TRANSPARENT pass mouse input to windows underneath,
+        // including windows owned by other processes (unlike HTTRANSPARENT alone).
+        bool ClickThrough { get { return st.NearPointerClickThrough && !Tray && Pos == 9; } }
+
+        void SyncMouseInput()
+        {
+            if (Handle == IntPtr.Zero) return;
+            const int transparent = 0x20, exStyle = -20;
+            int style = Native.GetWindowLong(Handle, exStyle);
+            Native.SetWindowLong(Handle, exStyle, ClickThrough ? style | transparent : style & ~transparent);
+            if (ClickThrough && double.IsPositiveInfinity(deadline)) deadline = Now + duration;
+        }
 
         public Card(Role role = Role.Main)
         {
@@ -108,6 +120,7 @@ namespace Cccc
                 ExStyle = Native.WS_EX_LAYERED | Native.WS_EX_TOOLWINDOW | Native.WS_EX_TOPMOST | Native.WS_EX_NOACTIVATE,
             });
             vsync = new Vsync(Handle, Native.WM_APP_FRAME);
+            SyncMouseInput();
         }
 
         protected override void WndProc(ref Message m)
@@ -196,6 +209,7 @@ namespace Cccc
         public void Apply(Settings settings)
         {
             st = settings;
+            SyncMouseInput();
             bool sys = Theme.SystemLight();
             string size = st.Scale + "|" + st.TextScale + "|" + st.FontFamily + "|" + st.Simple + "|" + L.Zh
                 + (caps ? "|" + st.CapsWidth + "|" + st.CapsHeight : "");
@@ -293,7 +307,7 @@ namespace Cccc
             bool info = c.Kind == Kind.Info || c.Kind == Kind.Empty;
             duration = role == Role.Wifi ? st.WifiDurationMs / 1000.0 : role == Role.Audio ? st.AudioDurationMs / 1000.0
                 : caps ? st.CapsDurationMs / 1000.0 : (st.DurationMs + (info ? 700 : 0)) / 1000.0;
-            deadline = (role == Role.Wifi ? st.WifiStayUntilClicked : role == Role.Audio ? st.AudioStayUntilClicked
+            deadline = !ClickThrough && (role == Role.Wifi ? st.WifiStayUntilClicked : role == Role.Audio ? st.AudioStayUntilClicked
                 : caps ? st.CapsStayUntilClicked : st.StayUntilClicked) ? double.PositiveInfinity : now + duration;
             visTarget = 1;
 
@@ -540,7 +554,7 @@ namespace Cccc
 
             bool inCard = CursorInCard();
             if (!inCard) hoverArmed = true;
-            if (visTarget > 0 && hoverArmed && inCard) deadline = Math.Max(deadline, now + 0.8);
+            if (!ClickThrough && visTarget > 0 && hoverArmed && inCard) deadline = Math.Max(deadline, now + 0.8);
             if (visTarget > 0 && now >= deadline) visTarget = 0;
 
             vis = visTarget > vis ? Math.Min(1, vis + dt / 0.34) : Math.Max(0, vis - dt / 0.26);
@@ -660,7 +674,7 @@ namespace Cccc
                     g.DrawPath(pen, path);
 
             double remain = Ease.Clamp01((deadline - now) / duration);
-            if (visTarget > 0 && remain > 0 && !(role == Role.Wifi ? st.WifiStayUntilClicked : role == Role.Audio ? st.AudioStayUntilClicked : caps ? st.CapsStayUntilClicked : st.StayUntilClicked))
+            if (visTarget > 0 && remain > 0 && (ClickThrough || !(role == Role.Wifi ? st.WifiStayUntilClicked : role == Role.Audio ? st.AudioStayUntilClicked : caps ? st.CapsStayUntilClicked : st.StayUntilClicked)))
             {
                 float x0 = CX + R, x1 = CX + W - R, y = Top + CardH - 3f;
                 using (var pen = new Pen(Color.FromArgb(th.Dark ? 70 : 60, accent), 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
@@ -816,7 +830,7 @@ namespace Cccc
             }
         }
 
-        bool OpenIcon { get { return st.OpenLinkOnClick && cur.Url != null && (cur.Kind == Kind.Copied || cur.Kind == Kind.Cut); } }
+        bool OpenIcon { get { return !ClickThrough && st.OpenLinkOnClick && cur.Url != null && (cur.Kind == Kind.Copied || cur.Kind == Kind.Cut); } }
 
         void DrawOpenIcon(Graphics g, float right, float alpha, Color accent)
         {

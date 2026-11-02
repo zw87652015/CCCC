@@ -110,6 +110,8 @@ namespace Cccc
         public static string ImportFailed { get { return T("Couldn't import this file.", "无法导入此文件。"); } }
         public static string ExportFailed { get { return T("Couldn't export settings.", "无法导出设置。"); } }
 
+        public static string NearClickThrough { get { return T("Click through near-pointer cards", "鼠标附近时点击穿透"); } }
+        public static string HintNearClickThrough { get { return T("Clicks reach the app underneath. Uses timed dismissal instead of hover or click actions. Applies to copy and Caps Lock cards near the pointer.", "点击直接传给下方应用，按时长关闭，不响应悬停或点击操作。适用于鼠标附近的复制和大写锁定提醒。"); } }
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }
         public static string MenuSound { get { return T("Sound", "提示音"); } }

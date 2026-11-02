@@ -65,6 +65,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
     private var fontFamilies: [String] = []
 
     private var chkPause: NSButton!, chkWarn: NSButton!, chkCaps: NSButton!, chkStart: NSButton!, chkAuto: NSButton!
+    private var chkNearClickThrough: NSButton!
     private var chkFull: NSButton!, chkStay: NSButton!, chkOpenLink: NSButton!, chkSound: NSButton!, chkSource: NSButton!, chkSimple: NSButton!, chkCapsStay: NSButton!
     private var chkWifi: NSButton!, chkWifiStay: NSButton!, sldWifiDuration: NSSlider!, lblWifiDuration: NSTextField!, lblWifiNames: NSTextField!
     private var chkAudio: NSButton!, chkAudioStay: NSButton!, sldAudioDuration: NSSlider!, lblAudioDuration: NSTextField!
@@ -134,7 +135,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         let parts: [Any?] = [
             Prefs.themeMode, Prefs.palette, Prefs.okColor, Prefs.bgColor, Prefs.borderColor, Prefs.titleColor,
             Prefs.subColor, Prefs.metaColor, Prefs.fullPalette, Prefs.fontFamily, Prefs.scale, Prefs.textScale,
-            Prefs.position, Prefs.durationMs, Prefs.stayUntilClicked, Prefs.showSource, Prefs.sourceWhen,
+            Prefs.nearPointerClickThrough, Prefs.position, Prefs.durationMs, Prefs.stayUntilClicked, Prefs.showSource, Prefs.sourceWhen,
             Prefs.sourceDetail, Prefs.simple, Prefs.transparency, Prefs.lang,
         ]
         return parts.map { String(describing: $0) }.joined(separator: "|")
@@ -535,11 +536,12 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         head.font = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
         let box = column([head, screen, rbNear, rbRandom])
 
+        chkNearClickThrough = check(L.nearClickThrough) { c in Prefs.nearPointerClickThrough = Customize.isOn(c) }
         chkStay = check(L.stayUntilClicked) { c in Prefs.stayUntilClicked = Customize.isOn(c) }
         sldDuration = slider(5, 100) { c in Prefs.durationMs = Int(round((c as! NSSlider).doubleValue)) * 100 }
         lblDuration = NSTextField(labelWithString: "")
         chkOpenLink = check(L.openLink) { c in Prefs.openLinkOnClick = Customize.isOn(c) }
-        return page([box, chkStay, row(L.durationTitle, [sldDuration, lblDuration]), chkOpenLink])
+        return page([box, chkNearClickThrough, NSTextField(wrappingLabelWithString: L.hintNearClickThrough), chkStay, row(L.durationTitle, [sldDuration, lblDuration]), chkOpenLink])
     }
 
     private func soundPage() -> NSView {
@@ -708,6 +710,7 @@ final class Customize: NSObject, NSWindowDelegate, NSMenuDelegate {
         sldTrans.doubleValue = Double(Prefs.transparency)
         sldDuration.doubleValue = Double(Prefs.durationMs / 100)
         sldDuration.isEnabled = !Prefs.stayUntilClicked
+        chkNearClickThrough.state = Prefs.nearPointerClickThrough ? .on : .off
         chkStay.state = Prefs.stayUntilClicked ? .on : .off
         chkOpenLink.state = Prefs.openLinkOnClick ? .on : .off
         sldCapsDuration.doubleValue = Double(Prefs.capsDurationMs) / 100
