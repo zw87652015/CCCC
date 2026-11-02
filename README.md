@@ -3,9 +3,7 @@
 给 Ctrl+C 一个看得见的反馈。复制后显示内容预览，重复复制会更新计数，未复制成功时给出提醒。
 Windows 与 macOS 原生应用，启动后驻留托盘／菜单栏。
 
-**当前源码版本：v1.10** · [更新日志](CHANGELOG.md) · [上游项目](https://github.com/zw87652015/CCCC) · [上游发布下载](https://github.com/zw87652015/CCCC/releases)
-
-> 此分支包含 v1.10 的鼠标附近点击穿透功能；上游发布页是否包含此改动，请以对应版本说明为准。
+**当前源码版本：v1.10** · [上游项目](https://github.com/zw87652015/CCCC) · [上游发布下载](https://github.com/zw87652015/CCCC/releases)
 
 ![CCCC 提醒示例](image.png)
 
@@ -29,7 +27,7 @@ macOS 的复制失败检测需要输入监控权限，来源信息可能需要�
 
 ## v1.10：鼠标附近时点击穿透
 
-入口：**自定义… → 行为 → 鼠标附近时点击穿透**，默认开启，设置自动保存并支持 JSON 备份。
+入口：**自定义… → 行为 → 鼠标附近时点击穿透**，默认关闭，设置自动保存并支持 JSON 备份。
 
 | 设置 | 鼠标附近的提醒行为 |
 | --- | --- |
@@ -58,12 +56,9 @@ macOS 的复制失败检测需要输入监控权限，来源信息可能需要�
 
 ```powershell
 ./build.ps1
-./test-click-through.ps1
 ```
 
 构建输出为 `dist/CCCC.exe` 和 `dist/CCCC-portable.zip`。构建前请退出该目录下正在运行的 CCCC，避免文件占用。构建产物不纳入 Git。
-
-点击穿透回归脚本使用独立注册表路径，检查配置保存、导入／导出、开关和位置变化、不同卡片类型，以及真实窗口的系统命中行为。测试会短暂显示测试卡片。
 
 ### macOS
 
@@ -75,17 +70,15 @@ bash mac/build.sh
 
 输出为 `mac/build/CCCC.app`，默认构建 arm64 与 x86_64。可用 `CCCC_ARCHS` 指定架构，`CCCC_SIGN_ID=-` 使用临时签名。正式签名、公证及打包参见 `mac/release.sh`。
 
-v1.10 的 Windows 构建和点击穿透检查已通过；macOS 改动已同步，尚未在 macOS 编译运行验证。
-
 ## English
 
 CCCC gives visible feedback when you copy: content previews, repeated-copy counts and unsuccessful-copy hints. It is a native tray/menu bar utility for Windows and macOS.
 
-**v1.10** adds **Customize… → Behavior → Click through near-pointer cards**, enabled by default. Mouse input passes through copy/cut and Caps Lock cards placed near the pointer. These cards expire after the configured duration; hovering does not extend them, clicks do not dismiss them or open links, and “Stay until clicked” is temporarily ignored. Turn the option off to restore interaction. Other positions and tray-anchored notifications are unchanged.
+**v1.10** adds **Customize… → Behavior → Click through near-pointer cards**, off by default. Mouse input passes through copy/cut and Caps Lock cards placed near the pointer. These cards expire after the configured duration; hovering does not extend them, clicks do not dismiss them or open links, and “Stay until clicked” is temporarily ignored. Turn the option off to restore interaction. Other positions and tray-anchored notifications are unchanged.
 
-Appearance includes light/dark/system themes, Liquid Glass, custom colors, fonts, sizing, compact mode and 0–75% transparency. Settings persist and can be exported/imported as JSON. See [CHANGELOG.md](CHANGELOG.md) for version details.
+Appearance includes light/dark/system themes, Liquid Glass, custom colors, fonts, sizing, compact mode and 0–75% transparency. Settings persist and can be exported/imported as JSON.
 
-Build Windows with `./build.ps1`, test with `./test-click-through.ps1`, and build macOS with `bash mac/build.sh`. Windows v1.10 has been built and tested; macOS changes still require compilation and runtime verification.
+Build Windows with `./build.ps1` and macOS with `bash mac/build.sh`.
 
 ## 许可证
 

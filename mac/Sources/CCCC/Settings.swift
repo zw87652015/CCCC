@@ -9,7 +9,7 @@ enum Prefs {
     private static let d = UserDefaults.standard
 
     static var nearPointerClickThrough: Bool {
-        get { (d.object(forKey: "NearPointerClickThrough") as? Bool) ?? true }
+        get { d.bool(forKey: "NearPointerClickThrough") }
         set { d.set(newValue, forKey: "NearPointerClickThrough") }
     }
     static var paused: Bool {
@@ -189,7 +189,7 @@ enum Prefs {
     }
 
     static func resetDisplay() {
-        nearPointerClickThrough = true
+        nearPointerClickThrough = false
         themeMode = 0; palette = 0; fullPalette = false
         okColor = nil; warnColor = nil; bgColor = nil; borderColor = nil; titleColor = nil; subColor = nil; metaColor = nil
         durationMs = 1900; stayUntilClicked = false; openLinkOnClick = false; position = 6; scale = 100; textScale = 100

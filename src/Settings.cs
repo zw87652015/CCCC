@@ -26,7 +26,7 @@ namespace Cccc
         public int ThemeMode, Palette, DurationMs = 1900, Position = 6, Scale = 100, TextScale = 100;
         public int FreeX = 500, FreeY = 900, Transparency;
         public int CapsPosition = -1, CapsFreeX = 500, CapsFreeY = 900, CapsWidth = 200, CapsHeight = 40, CapsDurationMs = 2600;
-        public bool NearPointerClickThrough = true;
+        public bool NearPointerClickThrough;
         public string Lang = "auto";
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
@@ -162,8 +162,7 @@ namespace Cccc
         public void ResetDisplay()
         {
             ThemeMode = Palette = 0;
-            NearPointerClickThrough = true;
-            FullPalette = StayUntilClicked = OpenLinkOnClick = CapsStayUntilClicked = WifiStayUntilClicked = Simple = false;
+            NearPointerClickThrough = FullPalette = StayUntilClicked = OpenLinkOnClick = CapsStayUntilClicked = WifiStayUntilClicked = Simple = false;
             AudioStayUntilClicked = false;
             Transparency = 0;
             DurationMs = 1900; Position = 6; Scale = 100; TextScale = 100;
