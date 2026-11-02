@@ -3,7 +3,7 @@
 给 Ctrl+C 一个看得见的反馈。复制后显示内容预览，重复复制会更新计数，未复制成功时给出提醒。
 Windows 与 macOS 原生应用，启动后驻留托盘／菜单栏。
 
-**当前源码版本：v1.10** · [上游项目](https://github.com/zw87652015/CCCC) · [上游发布下载](https://github.com/zw87652015/CCCC/releases)
+[下载 / Download](https://github.com/zw87652015/CCCC/releases)
 
 ![CCCC 提醒示例](image.png)
 
@@ -25,7 +25,7 @@ Windows 与 macOS 原生应用，启动后驻留托盘／菜单栏。
 
 macOS 的复制失败检测需要输入监控权限，来源信息可能需要辅助功能权限；Wi-Fi 名称读取需要定位授权。请按应用提示授权。
 
-## v1.10：鼠标附近时点击穿透
+## 鼠标附近时点击穿透
 
 入口：**自定义… → 行为 → 鼠标附近时点击穿透**，默认关闭，设置自动保存并支持 JSON 备份。
 
@@ -36,7 +36,7 @@ macOS 的复制失败检测需要输入监控权限，来源信息可能需要�
 
 仅影响位置设为 **鼠标附近** 的复制／剪切及 Caps Lock 卡片。其他位置和托盘定位的 Wi-Fi／声音输出提醒保持原有交互。
 
-开启穿透时，悬停不会延长显示时间，点击不会关闭卡片或打开链接，**直到点击才关闭**暂不生效，以免卡片一直停留。需要这些交互时关闭穿透即可。
+开启穿透时，悬停不会延长显示时间，点击不会关闭卡片或打开链接，**直到点击才关闭**不生效，以免卡片一直停留。需要这些交互时关闭穿透即可。
 
 ## 外观设置
 
@@ -44,21 +44,20 @@ macOS 的复制失败检测需要输入监控权限，来源信息可能需要�
 
 - **简易模式**：默认关闭。开启后使用 220×48 DIP 的紧凑单行卡片，仅显示状态图标和标题，隐藏内容预览、缩略图、元信息、计数徽章和来源行；文字缩放可能增大实际尺寸。
 - **透明度**：0–75%，默认 0%（完全不透明），作用于背景、文字、图标和阴影。
-- **液态玻璃**：Windows 使用背景采样与自绘合成；macOS 在可用时使用系统玻璃材质，否则使用模糊材质回退。
 
-显示设置通常会即时预览。点击穿透开关只影响鼠标附近的窗口行为，不会改动已选位置或外观。
+改动立即生效并在屏幕上弹出真实卡片预览，配置自动保存，重启后仍然生效。
 
-## 构建与验证
+## 构建
 
 ### Windows
 
-需要 Windows、.NET Framework 编译工具，以及 Windows 10 SDK 的 `Windows.winmd`。设置窗口使用 WPF/XAML，提醒窗口使用 Win32/GDI+。
+需要 Windows、.NET Framework 编译工具，以及 Windows 10 SDK 的 `Windows.winmd`。
 
 ```powershell
 ./build.ps1
 ```
 
-构建输出为 `dist/CCCC.exe` 和 `dist/CCCC-portable.zip`。构建前请退出该目录下正在运行的 CCCC，避免文件占用。构建产物不纳入 Git。
+构建输出为 `dist/CCCC.exe` 和 `dist/CCCC-portable.zip`。构建前请退出该目录下正在运行的 CCCC，避免文件占用。
 
 ### macOS
 
@@ -74,7 +73,7 @@ bash mac/build.sh
 
 CCCC gives visible feedback when you copy: content previews, repeated-copy counts and unsuccessful-copy hints. It is a native tray/menu bar utility for Windows and macOS.
 
-**v1.10** adds **Customize… → Behavior → Click through near-pointer cards**, off by default. Mouse input passes through copy/cut and Caps Lock cards placed near the pointer. These cards expire after the configured duration; hovering does not extend them, clicks do not dismiss them or open links, and “Stay until clicked” is temporarily ignored. Turn the option off to restore interaction. Other positions and tray-anchored notifications are unchanged.
+**Customize… → Behavior → Click through near-pointer cards** (off by default) lets mouse input pass through copy/cut and Caps Lock cards placed near the pointer. These cards expire after the configured duration; hovering does not extend them, clicks do not dismiss them or open links, and “Stay until clicked” is ignored. Turn the option off to restore interaction. Other positions and tray-anchored notifications are unchanged.
 
 Appearance includes light/dark/system themes, Liquid Glass, custom colors, fonts, sizing, compact mode and 0–75% transparency. Settings persist and can be exported/imported as JSON.
 
