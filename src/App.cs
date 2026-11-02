@@ -108,6 +108,7 @@ namespace Cccc
             miLang = new MenuItem(L.MenuLanguage, new[] { miLangEn, miLangZh });
             miCustomize = new MenuItem(L.MenuCustomize, delegate { OpenCustomize(); });
             miUpdate = new MenuItem(L.MenuCheckUpdate, delegate { CheckUpdate(true); });
+            miAutoUpdate.Visible = miUpdate.Visible = !Native.Packaged;
             miQuit = new MenuItem(L.MenuQuit, delegate { Quit(); });
             tray.ContextMenu = new ContextMenu(new[]
             {
@@ -125,7 +126,7 @@ namespace Cccc
                 else if (e.Mode == PowerModes.Resume) { wifi.Resume(); audio.Resume(); }
             };
 
-            if (Settings.AutoStart) Settings.AutoStart = true;
+            if (!Native.Packaged && Settings.AutoStart) Settings.AutoStart = true;
             Sync();
             hook.Start();
             updateTimer.Start();
@@ -475,7 +476,7 @@ namespace Cccc
 
         void CheckUpdate(bool manual)
         {
-            if (checking) return;
+            if (Native.Packaged || checking) return;
             checking = true;
             if (manual) Notice(L.UpdateChecking, L.UpdateCheckingSub);
             ThreadPool.QueueUserWorkItem(delegate
@@ -570,6 +571,7 @@ namespace Cccc
             AppContext.SetSwitch("Switch.System.Windows.DoNotScaleForDpiChanges", false);
             string verb = args.Length > 0 ? args[0] : "";
             if (verb == "--export-icon" && args.Length > 1) { Icons.ExportIco(args[1]); return; }
+            if (verb == "--export-png" && args.Length > 3) { Icons.ExportPng(args[1], int.Parse(args[2]), int.Parse(args[3])); return; }
             if (verb == "--sheet" && args.Length > 1) { Sheet.Render(args[1]); return; }
 
             int oldPid;

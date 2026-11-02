@@ -71,6 +71,19 @@ namespace Cccc
             return Alpha.Write(px, size, size, PixelFormat.Format32bppArgb);
         }
 
+        public static void ExportPng(string path, int canvas, int icon)
+        {
+            using (var src = App(icon))
+            using (var dst = new Bitmap(canvas, canvas, PixelFormat.Format32bppArgb))
+            using (var g = Graphics.FromImage(dst))
+            {
+                g.Clear(Color.Transparent);
+                int off = (canvas - icon) / 2;
+                g.DrawImage(src, off, off, icon, icon);
+                dst.Save(path, ImageFormat.Png);
+            }
+        }
+
         public static void ExportIco(string path)
         {
             int[] sizes = { 16, 20, 24, 32, 40, 48, 64, 256 };

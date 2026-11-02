@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Media;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
@@ -292,17 +294,50 @@ namespace Cccc
         {
             get
             {
+                if (Native.Packaged) return StoreStartup.Enabled();
                 using (var k = Registry.CurrentUser.OpenSubKey(RunKey))
                     return k != null && k.GetValue("CCCC") is string;
             }
             set
             {
+                if (Native.Packaged) { StoreStartup.Set(value); return; }
                 using (var k = Registry.CurrentUser.CreateSubKey(RunKey))
                 {
                     if (value) k.SetValue("CCCC", "\"" + Application.ExecutablePath + "\" --silent");
                     else k.DeleteValue("CCCC", false);
                 }
             }
+        }
+    }
+
+    // Packaged (MSIX) builds: HKCU writes are virtualized, so autostart uses the WinRT StartupTask instead.
+    static class StoreStartup
+    {
+        const string TaskId = "CCCC";
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static bool Enabled()
+        {
+            try
+            {
+                var state = global::Windows.ApplicationModel.StartupTask.GetAsync(TaskId).AsTask().Result.State;
+                return state == global::Windows.ApplicationModel.StartupTaskState.Enabled
+                    || state == global::Windows.ApplicationModel.StartupTaskState.EnabledByPolicy;
+            }
+            catch (Exception) { return false; }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void Set(bool on)
+        {
+            try
+            {
+                var task = global::Windows.ApplicationModel.StartupTask.GetAsync(TaskId).AsTask().Result;
+                if (!on) { task.Disable(); return; }
+                if (task.RequestEnableAsync().AsTask().Result == global::Windows.ApplicationModel.StartupTaskState.DisabledByUser)
+                    Process.Start("ms-settings:startupapps");
+            }
+            catch (Exception) { }
         }
     }
 

@@ -26,10 +26,14 @@ $src = Get-ChildItem (Join-Path $root 'src') -Filter *.cs | ForEach-Object { $_.
 $src += $buildInfo
 $fw = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 $wpf = Join-Path $fw 'WPF'
+$winmd = Get-ChildItem (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\UnionMetadata') -Directory |
+    Where-Object { $_.Name -match '^10\.' } | Sort-Object { [version]$_.Name } | Select-Object -Last 1 -ExpandProperty FullName
 $opts = @('/nologo', '/target:winexe', '/optimize+', '/debug-', "/win32manifest:$root\app.manifest",
           '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Web.Extensions.dll',
           "/r:$wpf\PresentationFramework.dll", "/r:$wpf\PresentationCore.dll", "/r:$wpf\WindowsBase.dll",
           "/r:$fw\System.Xaml.dll", "/r:$wpf\WindowsFormsIntegration.dll",
+          "/r:$fw\System.Runtime.dll", "/r:$fw\System.Runtime.WindowsRuntime.dll",
+          "/r:$winmd\Windows.winmd",
           "/r:$wpf\UIAutomationClient.dll", "/r:$wpf\UIAutomationTypes.dll",
           "/resource:$root\src\Customize.xaml,Cccc.Customize.xaml", "/out:$exe")
 

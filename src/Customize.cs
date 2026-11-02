@@ -473,7 +473,7 @@ namespace Cccc
         StackPanel PageOf(params UIElement[] items)
         {
             var sp = new StackPanel();
-            foreach (UIElement e in items) sp.Children.Add(e);
+            foreach (UIElement e in items) if (e != null) sp.Children.Add(e);
             return sp;
         }
 
@@ -564,7 +564,7 @@ namespace Cccc
                 // Ignored apps are rows inside their setting's card, not cards of their own.
                 Box(PageOf(CardGrid(L.IgnoreApps, L.HintIgnore, cmbIgnore), ignoreList)),
                 SettingCard(L.MenuStartup, L.HintStartup, chkStart),
-                SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
+                Native.Packaged ? null : SettingCard(L.MenuAutoUpdate, L.HintAutoUpdate, chkAuto),
                 SettingCard(L.MenuLanguage, L.HintLanguage, langSeg),
                 SettingCard(L.SettingsFile, L.HintSettingsFile, fileButtons));
         }

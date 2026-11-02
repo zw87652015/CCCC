@@ -10,6 +10,9 @@
   - `mac/CCCC.entitlements` (Location, needed under hardened runtime for the Wi-Fi SSID) is applied by `build.sh`.
 - Windows design sheet: `bin\CCCC.exe --sheet out.png` (`CCCC_LANG=en|zh`).
 - Windows debug log: run with `CCCC_DEBUG=1` → `%TEMP%\CCCC\debug.log`.
+- `build.ps1` needs the Windows 10 SDK (`UnionMetadata\10.*\Windows.winmd`, for the MSIX `StartupTask`).
+- Store package: `store.ps1` → `dist\CtrlCCCC_<ver>.msixbundle` (x64 + arm64, unsigned; Partner Center signs it). Manifest template: `store\AppxManifest.xml`. It runs `build.ps1` first, which fails if `dist\CCCC.exe` is running.
+- Packaged builds (`Native.Packaged`): autostart uses `StartupTask` (TaskId `CCCC`), not the Run key; the updater is off.
 
 # Rules
 - Never add an option to hide the tray icon (or run with no visible UI). It made antivirus flag CCCC as a keylogger.
