@@ -834,7 +834,7 @@ final class Card {
         let la = CGFloat(Ease.outCubic((t - tTitle) / 0.28))
         let tx = Card.CX + 58 + 6 * (1 - ta)
         let maxW = max(10, right - tx)
-        let top = cardTop + (L.zh ? 10 : 11)
+        let top = cardTop + (L.zh ? 12 : 13)
 
         drawLine(c.title, fTitle, th.title.withAlphaComponent(ta * la), x: tx, y: top + 5 * (1 - la), w: maxW, h: 22 * k)
 

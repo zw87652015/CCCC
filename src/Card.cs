@@ -911,7 +911,7 @@ namespace Cccc
             float la = (float)Ease.OutCubic((now - tTitle) / 0.28);
             float tx = CX + 58 + 6 * (1 - ta);
             float maxW = Math.Max(10, right - tx);
-            float top = L.Zh ? Top + 10 : Top + 11;
+            float top = L.Zh ? Top + 12 : Top + 13;
 
             using (var b = new SolidBrush(Color.FromArgb((int)(255 * ta * la), th.Title)))
                 g.DrawString(cur.Title, fTitle, b, new RectangleF(tx, top + 5 * (1 - la), maxW, 22 * k), fmt);
