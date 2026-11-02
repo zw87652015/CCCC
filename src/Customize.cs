@@ -120,7 +120,7 @@ namespace Cccc
                 SystemEvents.UserPreferenceChanged -= OnSystemChange;
                 if (Closed != null) Closed(this, EventArgs.Empty);
             };
-            w.SourceInitialized += delegate { ApplyMica(); };
+            w.SourceInitialized += delegate { ApplyMica(); ApplyDwm(); };
             txtTitle = (TextBlock)w.FindName("txtTitle");
             btnReset = (Button)w.FindName("btnReset");
             pageHost = (StackPanel)w.FindName("pageHost");
@@ -150,6 +150,8 @@ namespace Cccc
             System.Windows.Forms.Integration.ElementHost.EnableModelessKeyboardInterop(w);
             w.Show();
         }
+
+        public Window Window { get { return w; } }
 
         public void Activate() { w.Activate(); }
 

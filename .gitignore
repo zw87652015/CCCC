@@ -6,3 +6,4 @@ mac/build/
 # Windows build outputs (build.ps1)
 bin/
 dist/
+store/

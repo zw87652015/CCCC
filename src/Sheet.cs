@@ -90,7 +90,7 @@ namespace Cccc
             g.Restore(state);
         }
 
-        static Tuple<Content, bool, double>[] Rows()
+        internal static Tuple<Content, bool, double>[] Rows()
         {
             var thumb = new Bitmap(80, 80);
             using (var g = Graphics.FromImage(thumb))

@@ -9,6 +9,7 @@
   - `CCCC_ARCHS` (default `arm64 x86_64`) picks the architectures; `CCCC_SIGN_ID=-` forces ad-hoc signing.
   - `mac/CCCC.entitlements` (Location, needed under hardened runtime for the Wi-Fi SSID) is applied by `build.sh`.
 - Windows design sheet: `bin\CCCC.exe --sheet out.png` (`CCCC_LANG=en|zh`).
+- Store screenshots: `bin\CCCC.exe --shots <dir>` (`CCCC_LANG=en|zh`) → `01–06.png` at 1920×1080 × monitor DPI scale; shot 6 briefly shows the real Customize window and screen-captures it. Current set: `store\screenshots\{en,zh}`.
 - Windows debug log: run with `CCCC_DEBUG=1` → `%TEMP%\CCCC\debug.log`.
 - `build.ps1` needs the Windows 10 SDK (`UnionMetadata\10.*\Windows.winmd`, for the MSIX `StartupTask`).
 - Store package: `store.ps1` → `dist\CtrlCCCC_<ver>.msixbundle` (x64 + arm64, unsigned; Partner Center signs it). Manifest template: `store\AppxManifest.xml`. It runs `build.ps1` first, which fails if `dist\CCCC.exe` is running.

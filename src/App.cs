@@ -573,6 +573,7 @@ namespace Cccc
             if (verb == "--export-icon" && args.Length > 1) { Icons.ExportIco(args[1]); return; }
             if (verb == "--export-png" && args.Length > 3) { Icons.ExportPng(args[1], int.Parse(args[2]), int.Parse(args[3])); return; }
             if (verb == "--sheet" && args.Length > 1) { Sheet.Render(args[1]); return; }
+            if (verb == "--shots" && args.Length > 1) { Shots.Render(args[1]); return; }
 
             int oldPid;
             if (verb == "--updated" && args.Length > 1 && int.TryParse(args[1], out oldPid)) Updater.WaitForExit(oldPid);
