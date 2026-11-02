@@ -156,8 +156,8 @@ namespace Cccc
         public static string DetailTitle { get { return T("App + website + page/window title", "应用 + 网站 + 页面/窗口标题"); } }
         public static string RemoteDesktop { get { return T("Remote Desktop", "远程桌面"); } }
 
-        public static string MenuCustomize { get { return T("Customize…", "自定义…"); } }
-        public static string CustomizeTitle { get { return T("Customize CCCC", "自定义 CCCC"); } }
+        public static string MenuCustomize { get { return T("Settings…", "设置…"); } }
+        public static string CustomizeTitle { get { return T("CCCC Settings", "CCCC 设置"); } }
         public static string TabGeneral { get { return T("General", "常规"); } }
         public static string TabAppearance { get { return T("Appearance", "外观"); } }
         public static string TabBehavior { get { return T("Behavior", "行为"); } }

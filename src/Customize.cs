@@ -318,7 +318,8 @@ namespace Cccc
             w.Resources["HoverFill"] = Solid(dark ? "#15FFFFFF" : "#80F9F9F9");
             w.Resources["ThumbFill"] = Solid("#FFFFFF");
             w.Resources["ThumbStroke"] = Solid("#33000000");
-            w.Resources["UiFont"] = new FontFamily(L.Zh ? "Microsoft YaHei UI" : FirstInstalled("Segoe UI Variable Text", "Segoe UI"));
+            foreach (string size in new[] { "Text", "Display", "Small" })
+                w.Resources[size == "Text" ? "UiFont" : size + "Font"] = new FontFamily(L.Zh ? "Microsoft YaHei UI" : FirstInstalled("Segoe UI Variable " + size, "Segoe UI"));
             w.Resources["IconFont"] = new FontFamily(FirstInstalled("Segoe Fluent Icons", "Segoe MDL2 Assets"));
             ApplyDwm();
         }
@@ -360,11 +361,13 @@ namespace Cccc
             builtZh = L.Zh;
             w.Title = L.CustomizeTitle;
             string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAudio, L.TabAbout };
-            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE765", "\uE701", "\uE7F5", "\uE946" };
+            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE92E", "\uE701", "\uE7F5", "\uE946" };
             for (int i = 0; i < 9; i++)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
-                row.Children.Add(new TextBlock { Text = glyphs[i], Style = Res<Style>("Glyph"), Margin = new Thickness(0, 0, 12, 0) });
+                var icon = Glyph(glyphs[i], 20);
+                icon.Margin = new Thickness(0, 0, 12, 0);
+                row.Children.Add(icon);
                 row.Children.Add(new TextBlock { Text = labels[i], VerticalAlignment = VerticalAlignment.Center });
                 navs[i].Content = row;
             }
@@ -407,6 +410,17 @@ namespace Cccc
         // MARK: Helpers
 
         T Res<T>(string key) where T : class { return (T)w.FindResource(key); }
+
+        // Icon-font glyphs drawn as vector paths: WPF text gets no vertical anti-aliasing,
+        // so curved icons look stair-stepped next to Windows' own.
+        Path Glyph(string code, double size)
+        {
+            var text = new FormattedText(code, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                new Typeface(Res<FontFamily>("IconFont"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal), size, Brushes.Black, 1.0);
+            var p = new Path { Data = text.BuildGeometry(new Point(0, 0)), Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+            p.SetResourceReference(Shape.FillProperty, "TextBrush");
+            return p;
+        }
 
         static Brush Solid(string hex) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); }
 
@@ -625,7 +639,7 @@ namespace Cccc
             BindToggle(chkFull, v => set.FullPalette = v);
             chevron = new Button { Style = Res<Style>("IconBtn"), HorizontalAlignment = HorizontalAlignment.Right,
                                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-            chevron.Content = new TextBlock { Text = "\uE70D", Style = Res<Style>("Glyph"), FontSize = 12 };
+            chevron.Content = Glyph("\uE70D", 12);
             chevron.RenderTransformOrigin = new Point(0.5, 0.5);
             chevron.Click += delegate { expanded = !expanded; SyncExpanded(true); };
             var head = new StackPanel { Orientation = Orientation.Horizontal, Children = { chkFull, chevron } };
@@ -1293,7 +1307,9 @@ namespace Cccc
             s.Browse = new Button { Style = Res<Style>("Subtle"), Content = L.Browse, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             s.Browse.Click += delegate { Browse(s); };
             s.Play = new Button { Style = Res<Style>("RoundIcon"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            s.Play.Content = new TextBlock { Text = "\uE768", Style = Res<Style>("Glyph"), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center };
+            var play = Glyph("\uE768", 12);
+            play.HorizontalAlignment = HorizontalAlignment.Center;
+            s.Play.Content = play;
             s.Play.Click += delegate { test(ok); };
             return s;
         }

@@ -157,8 +157,8 @@ enum L {
     static var detailTitle: String { t("App + website + page/window title", "应用 + 网站 + 页面/窗口标题") }
     static var universalClipboard: String { t("Universal Clipboard", "通用剪贴板") }
 
-    static var menuCustomize: String { t("Customize…", "自定义…") }
-    static var customizeTitle: String { t("Customize CCCC", "自定义 CCCC") }
+    static var menuCustomize: String { t("Settings…", "设置…") }
+    static var customizeTitle: String { t("CCCC Settings", "CCCC 设置") }
     static var tabGeneral: String { t("General", "常规") }
     static var tabAppearance: String { t("Appearance", "外观") }
     static var tabBehavior: String { t("Behavior", "行为") }

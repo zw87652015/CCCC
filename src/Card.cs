@@ -41,6 +41,7 @@ namespace Cccc
         Vsync vsync;
         readonly StringFormat fmt, fmtCenter;
         Font fTitle, fSub, fMeta, fBadge, fCaps;
+        float titleCapMid;
 
         Settings st = new Settings();
         readonly Role role;
@@ -277,6 +278,12 @@ namespace Cccc
             fMeta = new Font(face, 12f * k, FontStyle.Regular, GraphicsUnit.Pixel);
             fBadge = new Font(bold, 12f * k, boldStyle, GraphicsUnit.Pixel);
             fCaps = new Font(bold, 15f, boldStyle, GraphicsUnit.Pixel);
+            using (var gp = new GraphicsPath())
+            {
+                gp.AddString("H", fTitle.FontFamily, (int)fTitle.Style, fTitle.Size, PointF.Empty, StringFormat.GenericTypographic);
+                var r = gp.GetBounds();
+                titleCapMid = r.Y + r.Height / 2;
+            }
         }
 
         static FontFamily Installed(string name)
@@ -868,7 +875,7 @@ namespace Cccc
                 using (var b = new SolidBrush(Color.FromArgb((int)(255 * ca), accent)))
                     g.DrawString(bt, fBadge, b, rect, fmtCenter);
                 using (var b = new SolidBrush(Color.FromArgb((int)(255 * ca * cl), th.Title)))
-                    g.DrawString(cur.Title, fTitle, b, new RectangleF(cx, Top + (CardH - 22 * k) / 2, bx - 10 - cx, 22 * k), fmt);
+                    g.DrawString(cur.Title, fTitle, b, new RectangleF(cx, Top + CardH / 2 - titleCapMid, bx - 10 - cx, 22 * k), fmt);
                 return;
             }
 

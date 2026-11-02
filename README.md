@@ -20,14 +20,14 @@ Windows 与 macOS 原生应用，启动后驻留托盘／菜单栏。
 
 1. Windows 便携版运行 `CCCC.exe`；macOS 打开 `CCCC.app`。
 2. 复制内容后会出现提醒。左键点击托盘／菜单栏图标可查看当前剪贴板。
-3. 右键图标进入 **自定义…**，调整外观、位置、行为和其他提醒。
+3. 右键图标进入 **设置…**，调整外观、位置、行为和其他提醒。
 4. 需要临时停止提醒时使用 **暂停**；退出后重新启动可继续使用已有配置。
 
 macOS 的复制失败检测需要输入监控权限，来源信息可能需要辅助功能权限；Wi-Fi 名称读取需要定位授权。请按应用提示授权。
 
 ## 鼠标附近时点击穿透
 
-入口：**自定义… → 行为 → 鼠标附近时点击穿透**，默认关闭，设置自动保存并支持 JSON 备份。
+入口：**设置… → 行为 → 鼠标附近时点击穿透**，默认关闭，设置自动保存并支持 JSON 备份。
 
 | 设置 | 鼠标附近的提醒行为 |
 | --- | --- |
@@ -40,7 +40,7 @@ macOS 的复制失败检测需要输入监控权限，来源信息可能需要�
 
 ## 外观设置
 
-在 **自定义… → 外观** 中调整主题、配色、字体、尺寸及以下选项：
+在 **设置… → 外观** 中调整主题、配色、字体、尺寸及以下选项：
 
 - **简易模式**：默认关闭。开启后使用 220×48 DIP 的紧凑单行卡片，仅显示状态图标和标题，隐藏内容预览、缩略图、元信息、计数徽章和来源行；文字缩放可能增大实际尺寸。
 - **透明度**：0–75%，默认 0%（完全不透明），作用于背景、文字、图标和阴影。
@@ -73,7 +73,7 @@ bash mac/build.sh
 
 CCCC gives visible feedback when you copy: content previews, repeated-copy counts and unsuccessful-copy hints. It is a native tray/menu bar utility for Windows and macOS.
 
-**Customize… → Behavior → Click through near-pointer cards** (off by default) lets mouse input pass through copy/cut and Caps Lock cards placed near the pointer. These cards expire after the configured duration; hovering does not extend them, clicks do not dismiss them or open links, and “Stay until clicked” is ignored. Turn the option off to restore interaction. Other positions and tray-anchored notifications are unchanged.
+**Settings… → Behavior → Click through near-pointer cards** (off by default) lets mouse input pass through copy/cut and Caps Lock cards placed near the pointer. These cards expire after the configured duration; hovering does not extend them, clicks do not dismiss them or open links, and “Stay until clicked” is ignored. Turn the option off to restore interaction. Other positions and tray-anchored notifications are unchanged.
 
 Appearance includes light/dark/system themes, Liquid Glass, custom colors, fonts, sizing, compact mode and 0–75% transparency. Settings persist and can be exported/imported as JSON.
 
