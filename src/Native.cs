@@ -104,7 +104,11 @@ namespace Cccc
         [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern int GetCurrentPackageFullName(ref int length, StringBuilder name);
         public static readonly bool Packaged = IsPackaged();
-        static bool IsPackaged() { int length = 0; return GetCurrentPackageFullName(ref length, null) != 15700; }
+        static bool IsPackaged()
+        {
+            try { int length = 0; return GetCurrentPackageFullName(ref length, null) != 15700; }
+            catch (EntryPointNotFoundException) { return false; }
+        }
         [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder sb, ref uint size);
         [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
