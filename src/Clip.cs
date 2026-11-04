@@ -12,8 +12,20 @@ namespace Cccc
 {
     static class ClipReader
     {
+        // The last Read() found the clipboard held open by another app (e.g. Word writing a huge table).
+        public static bool Locked { get; private set; }
+
+        // One quick probe, no retries: is the clipboard still held open?
+        public static bool Busy()
+        {
+            if (!Native.OpenClipboard(IntPtr.Zero)) return true;
+            Native.CloseClipboard();
+            return false;
+        }
+
         public static Content Read()
         {
+            Locked = false;
             object com = null;
             for (int i = 0; i < 5 && com == null; i++)
             {
@@ -128,7 +140,7 @@ namespace Cccc
                 open = Native.OpenClipboard(IntPtr.Zero);
                 if (!open) Thread.Sleep(30);
             }
-            if (!open) return null;
+            if (!open) { Locked = true; return null; }
             try
             {
                 var names = new System.Collections.Generic.List<string>();

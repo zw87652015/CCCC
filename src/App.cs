@@ -34,7 +34,8 @@ namespace Cccc
 
         string lastSig, lastHold;
         double lastTime = -99, lastFail = -99;
-        int count, failCount, keyKind, keyTick;
+        int count, failCount, keyKind, keyTick, lockedAt;
+        bool locked;
         uint keySeq, lastSeq;
         bool checking, capsOn = Native.CapsLock();
         string declinedTag;
@@ -386,15 +387,29 @@ namespace Cccc
             // Office raises WM_CLIPBOARDUPDATE on every paste without changing anything.
             uint seq = Native.GetClipboardSequenceNumber();
             if (seq == lastSeq) return;
+            uint prevSeq = lastSeq;
             lastSeq = seq;
-            if (set.Paused) return;
-            Content c = ClipReader.Read();
-            if (c == null) return;
+            if (set.Paused) { locked = false; return; }
+            Content c = locked && ClipReader.Busy() ? null : ClipReader.Read();
+            if (c == null)
+            {
+                // The owner (e.g. Word writing a huge table) still holds the clipboard open; read again shortly.
+                if (ClipReader.Locked && (!locked || unchecked(Environment.TickCount - lockedAt) < 15000))
+                {
+                    if (!locked) { locked = true; lockedAt = Environment.TickCount; }
+                    lastSeq = prevSeq;
+                    debounce.Start();
+                }
+                else locked = false;
+                return;
+            }
+            int readAt = locked ? lockedAt : Environment.TickCount;
+            locked = false;
             Source src = Sources.Detect(true, c.Site);
 
             // Same content rewritten with no copy key pressed, e.g. Office re-publishing
             // the clipboard when the source document closes.
-            bool keyed = keyKind != 0 && unchecked(Environment.TickCount - keyTick) < 1500;
+            bool keyed = keyKind != 0 && unchecked(readAt - keyTick) < 1500;
             bool ignored = src != null && set.Ignores(src.Exe);
             if ((c.Sig != null && c.Sig == lastSig && !keyed) || ignored)
             {
