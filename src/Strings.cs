@@ -112,6 +112,27 @@ namespace Cccc
 
         public static string NearClickThrough { get { return T("Click through near-pointer cards", "鼠标附近时点击穿透"); } }
         public static string HintNearClickThrough { get { return T("Clicks reach the app underneath. Uses timed dismissal instead of hover or click actions. Applies to copy and Caps Lock cards near the pointer.", "点击直接传给下方应用，按时长关闭，不响应悬停或点击操作。适用于鼠标附近的复制和大写锁定提醒。"); } }
+        public static string SuperPasteTitle { get { return T("Super Paste", "超级粘贴"); } }
+        public static string SPChanged { get { return T("Cancelled: focus or clipboard changed.", "已取消：焦点或剪贴板发生变化。"); } }
+        public static string SPTimeout { get { return T("Cancelled: release the shortcut within 2 seconds.", "已取消：请在 2 秒内松开快捷键。"); } }
+        public static string SPClipboardBusy { get { return T("Clipboard busy; nothing pasted.", "剪贴板被占用，未执行粘贴。"); } }
+        public static string SPEmpty { get { return T("The cleaned result is empty; clipboard unchanged.", "清理结果为空，剪贴板保持不变。"); } }
+        public static string SPPrivate { get { return T("Private clipboard content is not processed.", "不处理带隐私标记的剪贴板内容。"); } }
+        public static string SPNotText { get { return T("Super Paste only supports text, not images or files.", "超级粘贴仅支持文本，不处理图片或文件。"); } }
+        public static string SPTooLarge { get { return T("Text is too large (limit: 1 million UTF-16 characters).", "文本过大（上限约 100 万 UTF-16 字符）。"); } }
+        public static string SPManualPaste { get { return T("Cleaned text is on the clipboard. Please paste manually.", "清理结果已保留在剪贴板，请手动粘贴。"); } }
+        public static string SPConflict { get { return T("Shortcut unavailable; choose another. If previously active, the previous shortcut remains in use.", "快捷键不可用，请修改；若此前已启用，原快捷键仍然有效。"); } }
+        public static string SPActive { get { return T("Active", "已激活"); } }
+        public static string SPInactive { get { return T("Disabled or paused", "未启用或已暂停"); } }
+        public static string SPHotkeyHint { get { return T("Click the box and press Ctrl/Alt/Shift + a letter, digit or F1–F12. JetBrains uses Ctrl+Shift+Alt+V for plain-text paste. Ctrl+V is reserved for normal paste. Successful registration cannot detect app-local shortcuts.", "点击输入框，按 Ctrl/Alt/Shift 加字母、数字或 F1–F12。JetBrains 已使用 Ctrl+Shift+Alt+V 粘贴纯文本。Ctrl+V 保留为普通粘贴。注册成功不能排除应用内部快捷键冲突。"); } }
+        public static string SPOverwrite { get { return T("Pastes plain text and replaces the clipboard with the cleaned result. Original formatting is not restored.", "以纯文本粘贴，并覆盖剪贴板为清理结果；不恢复原格式。"); } }
+        public static string SPMarkdown { get { return T("Markdown (protect structure)", "Markdown（保护结构）"); } }
+        public static string SPPlain { get { return T("Plain text", "普通文本"); } }
+        public static string SPSample { get { return T("Example input (never reads the clipboard)", "示例输入（不读取剪贴板）"); } }
+        public static string SPOutput { get { return T("Result", "处理结果"); } }
+        public static string SPModeHint { get { return T("Markdown conservatively skips code, lists, tables and ambiguous syntax; adding blank lines is disabled. Tab-separated table runs are protected in both modes.", "Markdown 保守跳过代码、列表、表格和不确定语法，禁用补空行。两种模式均保护 Tab 分列表格区域。"); } }
+        public static string[] SPRuleLabels { get { return Zh ? new[] { "清理异常项目符号（仅六种私用区字符，保留 ■ ● •）", "Tab 替换为空格（4 字符制表位，表格除外）", "删除段首空格", "删除段尾空格", "删除中英文之间的空格", "删除重复空格", "删除重复换行", "换行之间补空行（仅普通文本）", "删除文末换行" } : new[] { "Remove six private-use bullet symbols (keep ■ ● •)", "Expand tabs (4-column stops; except tables)", "Trim line starts", "Trim line ends", "Remove spaces between Chinese and ASCII letters/digits", "Collapse repeated spaces", "Collapse repeated newlines", "Add blank lines (plain text only)", "Remove final newlines" }; } }
+
         public static string MenuShow { get { return T("Show clipboard", "查看剪贴板"); } }
         public static string MenuPause { get { return T("Pause", "暂停"); } }
         public static string MenuSound { get { return T("Sound", "提示音"); } }

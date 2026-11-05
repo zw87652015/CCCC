@@ -27,6 +27,17 @@ namespace Cccc
         public int FreeX = 500, FreeY = 900, Transparency;
         public int CapsPosition = -1, CapsFreeX = 500, CapsFreeY = 900, CapsWidth = 200, CapsHeight = 40, CapsDurationMs = 2600;
         public bool NearPointerClickThrough;
+        public bool SuperPasteEnabled;
+        public int SuperPasteKey = 0x56, SuperPasteModifiers = 7, SuperPasteOptions = 257;
+        public bool SuperPasteMarkdown = true;
+        public PasteRules PasteRules()
+        {
+            return new PasteRules { Markdown = SuperPasteMarkdown, Symbols = (SuperPasteOptions & 1) != 0,
+                Tabs = (SuperPasteOptions & 2) != 0, Leading = (SuperPasteOptions & 4) != 0,
+                Trailing = (SuperPasteOptions & 8) != 0, CjkSpaces = (SuperPasteOptions & 16) != 0,
+                Spaces = (SuperPasteOptions & 32) != 0, Newlines = (SuperPasteOptions & 64) != 0,
+                BlankLines = (SuperPasteOptions & 128) != 0, EndNewlines = (SuperPasteOptions & 256) != 0 };
+        }
         public string Lang = "auto";
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
@@ -47,6 +58,11 @@ namespace Cccc
             {
                 if (k == null) return s;
                 s.Paused = Flag(k, "Paused", s.Paused);
+                s.SuperPasteEnabled = Flag(k, "SuperPasteEnabled", false);
+                s.SuperPasteMarkdown = Flag(k, "SuperPasteMarkdown", true);
+                s.SuperPasteKey = Num(k, "SuperPasteKey", 0x56, 0x30, 0x7B);
+                s.SuperPasteModifiers = Num(k, "SuperPasteModifiers", 7, 1, 7);
+                s.SuperPasteOptions = Num(k, "SuperPasteOptions", 257, 0, 511);
                 s.NearPointerClickThrough = Flag(k, "NearPointerClickThrough", s.NearPointerClickThrough);
                 s.Sound = Flag(k, "Sound", s.Sound);
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
@@ -108,6 +124,11 @@ namespace Cccc
             using (var k = Registry.CurrentUser.CreateSubKey(Key))
             {
                 k.SetValue("Paused", Paused ? 1 : 0, RegistryValueKind.DWord);
+                k.SetValue("SuperPasteEnabled", SuperPasteEnabled ? 1 : 0);
+                k.SetValue("SuperPasteMarkdown", SuperPasteMarkdown ? 1 : 0);
+                k.SetValue("SuperPasteKey", SuperPasteKey);
+                k.SetValue("SuperPasteModifiers", SuperPasteModifiers);
+                k.SetValue("SuperPasteOptions", SuperPasteOptions);
                 k.SetValue("NearPointerClickThrough", NearPointerClickThrough ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
