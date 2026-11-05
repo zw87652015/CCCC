@@ -74,6 +74,7 @@ namespace Cccc
             ownWrite(written);
             // Do not send into a newly focused window even if clipboard writing yielded to it.
             bool valid = desktop.Foreground == target && desktop.Sequence == written;
+            Native.Debug("super-paste: committed=" + written + ", current=" + desktop.Sequence + ", same-focus=" + (desktop.Foreground == target));
             Cancel();
             if (!valid || !desktop.SendPaste()) notice(L.SPManualPaste);
         }
@@ -154,9 +155,15 @@ namespace Cccc
                 {
                     if (Sequence != expected || !EmptyClipboard()) return false;
                     if (SetClipboardData(13, h) == IntPtr.Zero) return false;
-                    h = IntPtr.Zero; written = Sequence; return true;
+                    h = IntPtr.Zero;
                 }
                 finally { Native.CloseClipboard(); }
+                // CloseClipboard finalizes synthesized text formats. The sequence captured
+                // while still open may become stale before the caller validates it.
+                // A different owner means another app has already replaced our result.
+                if (Native.GetClipboardOwner() != owner) return false;
+                written = Sequence;
+                return true;
             }
             finally { if (h != IntPtr.Zero) GlobalFree(h); }
         }
@@ -166,6 +173,7 @@ namespace Cccc
             for (int i = 0; i < 4; i++)
             { keys[i].type = 1; keys[i].data.keyboard.key = (ushort)(i == 0 || i == 3 ? 0x11 : 0x56); keys[i].data.keyboard.flags = (uint)(i >= 2 ? 2 : 0); }
             uint sent = SendInput(4, keys, Marshal.SizeOf(typeof(INPUT)));
+            Native.Debug("super-paste: input-events=" + sent + "/4, win32-error=" + (sent == 4 ? 0 : Marshal.GetLastWin32Error()));
             if (sent > 0 && sent < 4)
             {
                 // Release only our injected keys after a partial send; never retry the paste.
