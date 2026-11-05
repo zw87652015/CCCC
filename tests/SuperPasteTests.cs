@@ -15,7 +15,7 @@ namespace Cccc {
         static string Clean(string text, PasteRules r) { return SuperPasteText.Clean(text, r).Text; }
         [STAThread] static void Main(string[] args) {
             Settings.Key = @"Software\CCCC-superpaste-tests-" + Guid.NewGuid().ToString("N");
-            try { TextTests(); TransactionTests(); HotkeyTests(); SettingsTests(); UiTests(args[0]); InputTests(); Console.WriteLine("PASS: " + checks + " Super Paste checks"); }
+            try { TextTests(); TransactionTests(); HotkeyTests(); SettingsTests(); InputTests(); UiTests(args[0]); Console.WriteLine("PASS: " + checks + " Super Paste checks"); }
             catch(Exception e) { Console.WriteLine("FAIL: " + e); Environment.ExitCode=1; }
             finally { Registry.CurrentUser.DeleteSubKeyTree(Settings.Key,false); }
         }
@@ -49,6 +49,30 @@ namespace Cccc {
             Equal("before `code\n  中文  ABC\nend`\n",Clean("before `code\n  中文  ABC\nend`\n",all),"multiline code spans stay byte-identical");
             Equal("\uF06C# heading",Clean("\uF06C# heading",all),"symbol removal must not create Markdown syntax");
             Equal("a   b\nc       d",Clean("a\tb\nc\t\td",new PasteRules { Markdown=false, Symbols=false, EndNewlines=false, Tabs=true }),"inconsistent TSV is not a table");
+            foreach(string sample in new[] {
+                "<pre>\n\n  中文  ABC\t\uF06C\n\n</pre>\n", "<!-- comment\n\n  中文  ABC\n-->\n",
+                "<script>`code`\n\n  var  a = 1;\n</script>\n", "<?processing\n\n  text  here\n?>\n",
+                "<![CDATA[\n\n  中文  ABC\n]]>\n", "---\ntitle: example\n\n  value  with spaces\n---\n",
+                "- parent\n\n  paragraph  two\n\n  - nested\n", "> quote\nlazy  continuation\n",
+                "    code\n\n\n    more  code\n",
+                "[label](\n  https://example.test/a\n  \"title  here\"\n)\n",
+                "[multi\n  line  label](target)\n", "[ref]:\n  https://example.test\n  \"title  here\"\n" }) {
+                Equal(sample,Clean(sample,all),"additional protected Markdown block");
+                Equal(sample,Clean(Clean(sample,all),all),"protected Markdown stable on repeated runs");
+            }
+            Equal("- item\n\nnormal text",Clean("- item\n\nnormal  text",all),"plain paragraph resumes after list");
+            var performance=System.Diagnostics.Stopwatch.StartNew();
+            string nearDivider="---"+new string(' ',20000)+"x";
+            Equal("--- x",Clean(nearDivider,new PasteRules {Markdown=true,Symbols=false,EndNewlines=false,Spaces=true}),"near divider bounded cleanup");
+            var manyLines=new System.Text.StringBuilder();for(int i=0;i<30000;i++)manyLines.Append("line\n");
+            var blankRule=Plain();blankRule.BlankLines=true;
+            string spaced=Clean(manyLines.ToString(),blankRule);
+            Check(spaced.Length==manyLines.Length+29999,"large input blank-line insertion");
+            Equal(spaced,Clean(spaced,blankRule),"large input newline idempotence");
+            Check(performance.ElapsedMilliseconds<10000,"large input completes within budget");
+            Check(WindowsPasteDesktop.SupportsText(f=>f==13||f==8),"Unicode text accepted alongside bitmap preview");
+            Check(!WindowsPasteDesktop.SupportsText(f=>f==8),"textless image rejected");
+            Check(!WindowsPasteDesktop.SupportsText(f=>f==13||f==15),"file list rejected even with text representation");
             foreach (bool markdown in new[]{false,true}) {
                 var options=All(markdown);
                 foreach(string sample in new[]{"  中文  ABC  \n\n\n def  \n", "a\tb\nc\td\n", "```\nx   y\n```\n", "a\nb", "\n\n", ""}) {
@@ -58,11 +82,12 @@ namespace Cccc {
         }
         sealed class Desktop : IPasteDesktop {
             public IntPtr Focus=new IntPtr(42); public uint Seq=1; public bool Released=true, Read=true, Write=true, Send=true;
+            public bool ThrowSend, ReplaceAfterWrite;
             public string Input="\uF06Chello\n", Reason; public int Writes,Sends; public string Output;
             public IntPtr Foreground {get{return Focus;}} public uint Sequence {get{return Seq;}} public bool KeysReleased {get{return Released;}}
             public bool TryRead(out string text,out string reason){text=Read?Input:null;reason=Reason;return Read;}
-            public bool TryWrite(string text,uint expected,out uint written){written=Seq;if(!Write||Seq!=expected)return false;Output=text;Writes++;written=++Seq;return true;}
-            public bool SendPaste(){Sends++;return Send;}
+            public bool TryWrite(string text,uint expected,out uint written){written=Seq;if(!Write||Seq!=expected)return false;Output=text;Writes++;written=++Seq;if(ReplaceAfterWrite)Seq++;return true;}
+            public bool SendPaste(){Sends++;if(ThrowSend)throw new InvalidOperationException();return Send;}
         }
         static void TransactionTests() {
             double time=0;var d=new Desktop();var notices=new List<string>();uint own=0;
@@ -77,6 +102,8 @@ namespace Cccc {
                 d.Input="new";d.Send=false;p.Begin(new PasteRules());p.Step();Check(d.Output=="new"&&d.Sends==2&&notices[notices.Count-1]==L.SPManualPaste,"send failure leaves cleaned text");
                 d.Write=false;p.Begin(new PasteRules());p.Step();time+=1;p.Step();Check(!p.Busy&&d.Sends==2,"write contention never sends");
                 p.Begin(new PasteRules());p.Cancel();p.Step();Check(d.Sends==2,"pause cancellation");
+                d.Write=true;d.ThrowSend=true;p.Begin(new PasteRules());p.Step();Check(notices[notices.Count-1]==L.SPManualPaste&&d.Output=="new","send exception preserves manual-paste guidance");
+                d.ThrowSend=false;d.ReplaceAfterWrite=true;int beforeSend=d.Sends;p.Begin(new PasteRules());p.Step();Check(d.Sends==beforeSend&&notices[notices.Count-1]==L.SPChanged,"clipboard changed after write never claims cleaned result remains");
             }
         }
         static void HotkeyTests() {
@@ -92,15 +119,55 @@ namespace Cccc {
                 first.Configure(false,7,0x7A);Check(second.Configure(true,7,0x7A),"replacement after release");
                 Check(second.Configure(true,7,0x78)&&second.Configure(true,7,0x79),"multiple replacements release correct IDs");
                 second.Configure(false,7,0x79);Check(!second.Active,"pause releases binding");
+                Check(second.Configure(true,new[]{"7:120","7:121","7:120"}) && second.RegisteredShortcuts.Length==2,"multiple hotkeys deduplicated");
+                Check(!first.Configure(true,7,120)&&!first.Configure(true,7,121),"both shortcuts really registered");
+                var registrations=(Dictionary<string,int>)typeof(PasteHotkey).GetField("registrations",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(second);
+                var received=new List<int>();second.Pressed+=key=>received.Add(key);
+                var proc=typeof(PasteHotkey).GetMethod("WndProc",BindingFlags.Instance|BindingFlags.NonPublic);
+                foreach(var pair in registrations) {
+                    int mods,key;PasteHotkey.Parse(pair.Key,out mods,out key);
+                    var msg=Message.Create(second.Handle,0x312,new IntPtr(pair.Value),new IntPtr((key<<16)|mods));
+                    proc.Invoke(second,new object[]{msg});
+                }
+                Check(received.Count==2&&received.Contains(120)&&received.Contains(121),"each hotkey reports its actual trigger key");
+                Check(first.Configure(true,7,122),"occupy candidate shortcut");
+                Check(!second.Configure(true,new[]{"7:119","7:122"}),"multi-key change fails atomically");
+                Check(second.RegisteredShortcuts.Length==2&&!first.Configure(true,7,120)&&!first.Configure(true,7,121),"failed set preserves both old shortcuts");
+                Check(first.Configure(true,7,119),"staged shortcut released after conflict");
+                Check(second.Configure(true,new[]{"7:121"})&&first.Configure(true,7,120),"removing shortcut releases registration");
+                Check(!second.Configure(true,new[]{"2:86"})&&second.Active,"invalid set keeps working registration");
+                first.Configure(false,0,0);second.Configure(false,0,0);
+                Check(second.Configure(true,12,45),"register Shift Windows Insert");
+                Check(!first.Configure(true,12,45),"Windows shortcut conflict detected");
+                int winEvents=0;second.Pressed+=key=>{if(key==45)winEvents++;};
+                var winMsg=Message.Create(second.Handle,0x312,new IntPtr(registrations["12:45"]),new IntPtr((45<<16)|12));
+                proc.Invoke(second,new object[]{winMsg});
+                Check(winEvents==1,"Windows modifier message dispatched");
+                int parsedMods,parsedKey;
+                Check(!PasteHotkey.Parse("16:45",out parsedMods,out parsedKey),"unknown modifier bits rejected");
+                Check(PasteHotkey.ValidKey(45)&&PasteHotkey.Display("12:45")=="Shift+Windows+Insert","Insert supported and displayed");
+                second.Configure(false,new[]{"7:121"});Check(first.Configure(true,7,121),"disable releases entire set");
             }
         }
         static void SettingsTests(){
-            var s=Settings.Load();Check(!s.SuperPasteEnabled&&s.SuperPasteMarkdown&&s.SuperPasteOptions==257,"safe defaults");
-            s.SuperPasteEnabled=true;s.SuperPasteMarkdown=false;s.SuperPasteOptions=511;s.SuperPasteKey=0x71;s.SuperPasteModifiers=6;s.Save();
+            var s=Settings.Load();Check(s.SuperPasteShortcuts.Count==2&&s.SuperPasteShortcuts[0]=="7:86"&&s.SuperPasteShortcuts[1]=="12:45","two default shortcuts");Check(!s.SuperPasteEnabled&&s.SuperPasteMarkdown&&s.SuperPasteOptions==257,"safe defaults");
+            s.SuperPasteEnabled=true;s.SuperPasteMarkdown=false;s.SuperPasteOptions=511;s.SuperPasteKey=0x71;s.SuperPasteModifiers=6;s.SuperPasteShortcuts=new List<string>{"6:113","12:45","7:119"};s.Save();
             var loaded=Settings.Load();Check(loaded.SuperPasteEnabled&&!loaded.SuperPasteMarkdown&&loaded.SuperPasteOptions==511,"persist rules");
             var imported=Settings.Import(s.ToJson());Check(imported.SuperPasteKey==0x71&&imported.SuperPasteModifiers==6&&imported.SuperPasteOptions==511,"JSON settings round trip");
+            Check(imported.SuperPasteShortcuts.Count==3&&imported.SuperPasteShortcuts[2]=="7:119","multi-shortcut JSON round trip");
+            var old=Settings.Import("{\"format\":\"cccc-settings\",\"version\":1,\"settings\":{\"SuperPasteKey\":113,\"SuperPasteModifiers\":6}}");
+            Check(old.SuperPasteShortcuts.Count==2&&old.SuperPasteShortcuts[0]=="6:113"&&old.SuperPasteShortcuts[1]=="12:45","old JSON migrates custom shortcut and adds Insert");
+            using(var k=Registry.CurrentUser.OpenSubKey(Settings.Key,true)) {
+                k.SetValue("SuperPasteShortcuts",new[]{"12:45","12:45","invalid","2:86"},RegistryValueKind.MultiString);
+            }
+            Check(Settings.Load().SuperPasteShortcuts.Count==1,"invalid and duplicate imported shortcuts removed");
+            old.SuperPasteShortcuts=new List<string>{"7:86"};old.Save();
+            Check(Settings.Load().SuperPasteShortcuts.Count==1,"explicitly removed default stays removed");
         }
         static void UiTests(string dir) {
+            Check(Customize.PasteModifierMask(System.Windows.Input.ModifierKeys.Shift,true)==12,"capture supplements missing Windows modifier");
+            Check(Customize.PasteModifierMask(System.Windows.Input.ModifierKeys.Shift|System.Windows.Input.ModifierKeys.Windows,false)==12,"capture retains WPF Windows modifier");
+            Check(Customize.PasteModifierMask(System.Windows.Input.ModifierKeys.Shift,false)==4,"capture does not invent Windows modifier");
             L.Apply("zh");var s=new Settings();
             var ui=new Customize(s,()=>{},b=>{},()=>{},()=>{},()=>{},b=>{},new WifiWatch());
             try {
@@ -112,6 +179,35 @@ namespace Cccc {
                 var binding=BindingFlags.Instance|BindingFlags.NonPublic;
                 var checksUi=(System.Windows.Controls.CheckBox[])typeof(Customize).GetField("spRules",binding).GetValue(ui);
                 var mode=(System.Windows.Controls.ComboBox)typeof(Customize).GetField("spMode",binding).GetValue(ui);
+                var shortcutsUi=(System.Windows.Controls.ListBox)typeof(Customize).GetField("spShortcuts",binding).GetValue(ui);
+                var keyUi=(System.Windows.Controls.TextBox)typeof(Customize).GetField("spKey",binding).GetValue(ui);
+                var removeUi=(System.Windows.Controls.Button)typeof(Customize).GetField("spRemove",binding).GetValue(ui);
+                Check(shortcutsUi.Items.Count==2,"UI lists both defaults");
+                shortcutsUi.SelectedIndex=1;Check(keyUi.Text=="Shift+Windows+Insert","UI selects Insert binding for editing");
+                removeUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Check(s.SuperPasteShortcuts.Count==1&&shortcutsUi.Items.Count==1&&!removeUi.IsEnabled,"UI removes shortcut and keeps at least one");
+                var addUi=(System.Windows.Controls.Button)typeof(Customize).GetField("spAdd",binding).GetValue(ui);
+                var saveKeyUi=(System.Windows.Controls.Button)typeof(Customize).GetField("spSaveKey",binding).GetValue(ui);
+                var modsUi=(System.Windows.Controls.CheckBox[])typeof(Customize).GetField("spModifiers",binding).GetValue(ui);
+                var mainKeyUi=(System.Windows.Controls.ComboBox)typeof(Customize).GetField("spMainKey",binding).GetValue(ui);
+                var statusUi=(System.Windows.Controls.TextBlock)typeof(Customize).GetField("spStatus",binding).GetValue(ui);
+                addUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                for(int i=0;i<4;i++)modsUi[i].IsChecked=(i==1||i==3);
+                mainKeyUi.SelectedValue=45;
+                saveKeyUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Check(s.SuperPasteShortcuts.Count==2&&s.SuperPasteShortcuts[1]=="12:45"&&keyUi.Text=="Shift+Windows+Insert","manual editor adds Windows Insert without physical keys");
+                addUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                saveKeyUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Check(s.SuperPasteShortcuts.Count==2&&statusUi.Text.Contains(L.SPShortcutExists),"duplicate shortcut clearly reported");
+                mainKeyUi.SelectedValue=0x7A;
+                saveKeyUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Check(s.SuperPasteShortcuts.Count==2&&s.SuperPasteShortcuts[1]=="12:122","manual editor updates selected shortcut");
+                for(int i=0;i<4;i++)modsUi[i].IsChecked=false;
+                saveKeyUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Check(s.SuperPasteShortcuts[1]=="12:122"&&statusUi.Text==L.SPInvalidShortcut,"no-modifier input rejected visibly");
+                modsUi[0].IsChecked=true;mainKeyUi.SelectedValue=86;
+                saveKeyUi.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Check(s.SuperPasteShortcuts[1]=="12:122"&&statusUi.Text==L.SPInvalidShortcut,"manual editor preserves normal Ctrl V");
                 Check(!checksUi[7].IsEnabled,"Markdown disables blank-line insertion");
                 mode.SelectedIndex=1;Check(!s.SuperPasteMarkdown&&checksUi[7].IsEnabled,"mode switch enables independent rule");
                 checksUi[7].IsChecked=true;mode.SelectedIndex=0;Check((s.SuperPasteOptions&128)!=0&&!checksUi[7].IsEnabled,"disabled rule retains plain mode preference");
@@ -147,8 +243,9 @@ namespace Cccc {
             // Real SendInput/WM_PASTE routing, with an in-memory test clipboard. The user's clipboard is never read or changed.
             IntPtr previous=Native.GetForegroundWindow();
             using(var form=new Form {Text="CCCC Super Paste input test",Width=420,Height=120})
-            using(var box=new Receiver {Dock=DockStyle.Fill}) {
+            using(var box=new Receiver {Dock=DockStyle.Fill,ImeMode=ImeMode.Disable}) {
                 form.Controls.Add(box); form.Show();
+                Application.DoEvents();
                 uint pid; uint foregroundThread=Native.GetWindowThreadProcessId(previous,out pid);
                 uint ownThread=Native.GetCurrentThreadId();
                 bool attached=foregroundThread!=ownThread && AttachThreadInput(ownThread,foregroundThread,true);
@@ -157,12 +254,15 @@ namespace Cccc {
                 var watch=System.Diagnostics.Stopwatch.StartNew();
                 while(watch.ElapsedMilliseconds<150){Application.DoEvents();System.Threading.Thread.Sleep(5);}
                 Check(Native.GetForegroundWindow()==form.Handle,"test receiver has focus");
+                box.Focus();
+                Check(box.Focused,"receiving textbox has keyboard focus");
+                box.Clear();
                 var desktop=new InputDesktop(form.Handle);string failure=null;
                 using(var paste=new SuperPaste(desktop,()=>watch.Elapsed.TotalSeconds,s=>failure=s,seq=>box.Payload=desktop.Output)) {
                     paste.Begin(new PasteRules());paste.Step();
                     long deadline=watch.ElapsedMilliseconds+500;
                     while(watch.ElapsedMilliseconds<deadline){Application.DoEvents();System.Threading.Thread.Sleep(5);}
-                    Check(failure==null&&box.Pastes==1&&box.Text=="hello","SendInput delivers exactly one paste of cleaned text");
+                    Check(failure==null&&box.Pastes==1&&box.Text=="hello","SendInput delivers exactly one paste of cleaned text; failure="+failure+"; pastes="+box.Pastes+"; length="+box.TextLength+"; suffix-crlf="+box.Text.EndsWith("\r\n")+"; prefix-crlf="+box.Text.StartsWith("\r\n")+"; payload="+(box.Payload=="hello")+"; busy="+paste.Busy+"; focus="+(Native.GetForegroundWindow()==form.Handle));
                 }
                 form.Close();
             }

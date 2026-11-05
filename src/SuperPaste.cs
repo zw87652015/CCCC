@@ -27,6 +27,7 @@ namespace Cccc
         uint sequence;
         double start;
         string text;
+        bool committed;
         PasteRules rules;
         public SuperPaste(IPasteDesktop desktop, Func<double> now, Action<string> notice, Action<uint> ownWrite)
         {
@@ -36,7 +37,7 @@ namespace Cccc
         public void Begin(PasteRules rules)
         {
             if (Busy) return;
-            this.rules = rules; target = desktop.Foreground; sequence = desktop.Sequence; start = now(); text = null;
+            this.rules = rules; target = desktop.Foreground; sequence = desktop.Sequence; start = now(); text = null; committed = false;
             Busy = true; timer.Start();
         }
         public void Cancel() { timer.Stop(); Busy = false; text = null; }
@@ -44,7 +45,7 @@ namespace Cccc
         public void Step()
         {
             try { StepCore(); }
-            catch (Exception) { Fail(L.SPClipboardBusy); }
+            catch (Exception) { Fail(committed ? L.SPManualPaste : L.SPClipboardBusy); }
         }
         void StepCore()
         {
@@ -71,12 +72,15 @@ namespace Cccc
             uint written;
             if (!desktop.TryWrite(text, sequence, out written))
             { if (now() - start >= 1) Fail(L.SPClipboardBusy); return; }
+            committed = true;
             ownWrite(written);
             // Do not send into a newly focused window even if clipboard writing yielded to it.
-            bool valid = desktop.Foreground == target && desktop.Sequence == written;
+            bool sameClipboard = desktop.Sequence == written;
+            bool sameFocus = desktop.Foreground == target;
             Native.Debug("super-paste: committed=" + written + ", current=" + desktop.Sequence + ", same-focus=" + (desktop.Foreground == target));
             Cancel();
-            if (!valid || !desktop.SendPaste()) notice(L.SPManualPaste);
+            if (!sameClipboard) notice(L.SPChanged);
+            else if (!sameFocus || !desktop.SendPaste()) notice(L.SPManualPaste);
         }
         public void Dispose() { Cancel(); timer.Dispose(); }
     }
@@ -107,6 +111,12 @@ namespace Cccc
         {
             get { foreach (int key in new[] { 0x10, 0x11, 0x12, 0x5B, 0x5C, triggerKey() }) if (Native.KeyDown(key)) return false; return true; }
         }
+        internal static bool SupportsText(Func<uint, bool> available)
+        {
+            // Rich-text providers (including Excel) may also advertise a bitmap preview.
+            // Consume Unicode text only; file lists and textless images remain unsupported.
+            return !available(15) && available(13);
+        }
         public bool TryRead(out string text, out string reason)
         {
             text = null; reason = null;
@@ -123,8 +133,7 @@ namespace Cccc
                     try { if (GlobalSize(h).ToUInt64() < 4 || Marshal.ReadInt32(p) == 0) { reason = L.SPPrivate; return false; } }
                     finally { GlobalUnlock(h); }
                 }
-                if (IsClipboardFormatAvailable(15) || IsClipboardFormatAvailable(2) || IsClipboardFormatAvailable(8) ||
-                    IsClipboardFormatAvailable(17) || IsClipboardFormatAvailable(RegisterClipboardFormat("PNG")) || !IsClipboardFormatAvailable(13))
+                if (!SupportsText(IsClipboardFormatAvailable))
                 { reason = L.SPNotText; return false; }
                 IntPtr handle = GetClipboardData(13), data = GlobalLock(handle);
                 if (data == IntPtr.Zero) return false;
@@ -158,8 +167,8 @@ namespace Cccc
                     h = IntPtr.Zero;
                 }
                 finally { Native.CloseClipboard(); }
-                // CloseClipboard finalizes synthesized text formats. The sequence captured
-                // while still open may become stale before the caller validates it.
+                // Capture the revision after the write transaction has closed, so any
+                // format finalization during CloseClipboard is included.
                 // A different owner means another app has already replaced our result.
                 if (Native.GetClipboardOwner() != owner) return false;
                 written = Sequence;

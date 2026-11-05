@@ -121,10 +121,16 @@ namespace Cccc
         public static string SPNotText { get { return T("Super Paste only supports text, not images or files.", "超级粘贴仅支持文本，不处理图片或文件。"); } }
         public static string SPTooLarge { get { return T("Text is too large (limit: 1 million UTF-16 characters).", "文本过大（上限约 100 万 UTF-16 字符）。"); } }
         public static string SPManualPaste { get { return T("Cleaned text is on the clipboard. Please paste manually.", "清理结果已保留在剪贴板，请手动粘贴。"); } }
-        public static string SPConflict { get { return T("Shortcut unavailable; choose another. If previously active, the previous shortcut remains in use.", "快捷键不可用，请修改；若此前已启用，原快捷键仍然有效。"); } }
+        public static string SPConflict { get { return T("Shortcut unavailable; this set was not applied. Any previously active shortcuts remain in use.", "快捷键不可用，本组设置未生效；此前已激活的快捷键仍然有效。"); } }
         public static string SPActive { get { return T("Active", "已激活"); } }
         public static string SPInactive { get { return T("Disabled or paused", "未启用或已暂停"); } }
-        public static string SPHotkeyHint { get { return T("Click the box and press Ctrl/Alt/Shift + a letter, digit or F1–F12. JetBrains uses Ctrl+Shift+Alt+V for plain-text paste. Ctrl+V is reserved for normal paste. Successful registration cannot detect app-local shortcuts.", "点击输入框，按 Ctrl/Alt/Shift 加字母、数字或 F1–F12。JetBrains 已使用 Ctrl+Shift+Alt+V 粘贴纯文本。Ctrl+V 保留为普通粘贴。注册成功不能排除应用内部快捷键冲突。"); } }
+        public static string SPManualShortcut { get { return T("Or select modifiers and a key below, then save. To keep existing shortcuts, click Add shortcut first.", "也可在下方勾选修饰键、选择主键后保存。要保留已有快捷键，请先点“添加快捷键”。"); } }
+        public static string SPSaveShortcut { get { return T("Save shortcut", "保存快捷键"); } }
+        public static string SPShortcutExists { get { return T("Already in the list; selected the existing shortcut:", "该快捷键已存在，已选中："); } }
+        public static string SPInvalidShortcut { get { return T("Select at least one modifier and a supported key. Ctrl+V remains reserved.", "请至少勾选一个修饰键，并选择主键；Ctrl+V 保留为普通粘贴。"); } }
+        public static string SPAddShortcut { get { return T("Add shortcut", "添加快捷键"); } }
+        public static string SPPressShortcut { get { return T("Click here and press a shortcut", "点击此处并按下快捷键"); } }
+        public static string SPHotkeyHint { get { return T("Select a shortcut to edit it, or add another. Use Ctrl/Alt/Shift/Windows + a letter, digit, F1–F12 or Insert. JetBrains uses Ctrl+Shift+Alt+V for plain-text paste. Ctrl+V remains normal paste. Registration cannot detect app-local conflicts.", "选择快捷键后点击输入框修改，或添加更多快捷键。支持 Ctrl/Alt/Shift/Windows 加字母、数字、F1–F12 或 Insert。JetBrains 使用 Ctrl+Shift+Alt+V 粘贴纯文本。Ctrl+V 保留为普通粘贴；注册成功不能排除应用内部冲突。"); } }
         public static string SPOverwrite { get { return T("Pastes plain text and replaces the clipboard with the cleaned result. Original formatting is not restored.", "以纯文本粘贴，并覆盖剪贴板为清理结果；不恢复原格式。"); } }
         public static string SPMarkdown { get { return T("Markdown (protect structure)", "Markdown（保护结构）"); } }
         public static string SPPlain { get { return T("Plain text", "普通文本"); } }

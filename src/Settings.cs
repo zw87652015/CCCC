@@ -30,6 +30,7 @@ namespace Cccc
         public bool SuperPasteEnabled;
         public int SuperPasteKey = 0x56, SuperPasteModifiers = 7, SuperPasteOptions = 257;
         public bool SuperPasteMarkdown = true;
+        public List<string> SuperPasteShortcuts = new List<string> { "7:86", "12:45" };
         public PasteRules PasteRules()
         {
             return new PasteRules { Markdown = SuperPasteMarkdown, Symbols = (SuperPasteOptions & 1) != 0,
@@ -60,8 +61,22 @@ namespace Cccc
                 s.Paused = Flag(k, "Paused", s.Paused);
                 s.SuperPasteEnabled = Flag(k, "SuperPasteEnabled", false);
                 s.SuperPasteMarkdown = Flag(k, "SuperPasteMarkdown", true);
-                s.SuperPasteKey = Num(k, "SuperPasteKey", 0x56, 0x30, 0x7B);
+                s.SuperPasteKey = Num(k, "SuperPasteKey", 0x56, 0x2D, 0x7B);
                 s.SuperPasteModifiers = Num(k, "SuperPasteModifiers", 7, 1, 7);
+                string[] shortcuts = k.GetValue("SuperPasteShortcuts") as string[];
+                s.SuperPasteShortcuts.Clear();
+                // Old settings keep their chosen shortcut and gain the second default.
+                if (shortcuts == null) shortcuts = new[] { s.SuperPasteModifiers + ":" + s.SuperPasteKey, "12:45" };
+                foreach (string shortcut in shortcuts)
+                {
+                    int mods, key;
+                    if (PasteHotkey.Parse(shortcut, out mods, out key))
+                    {
+                        string normalized = mods + ":" + key;
+                        if (!s.SuperPasteShortcuts.Contains(normalized)) s.SuperPasteShortcuts.Add(normalized);
+                    }
+                }
+                if (s.SuperPasteShortcuts.Count == 0) s.SuperPasteShortcuts.AddRange(new[] { "7:86", "12:45" });
                 s.SuperPasteOptions = Num(k, "SuperPasteOptions", 257, 0, 511);
                 s.NearPointerClickThrough = Flag(k, "NearPointerClickThrough", s.NearPointerClickThrough);
                 s.Sound = Flag(k, "Sound", s.Sound);
@@ -129,6 +144,7 @@ namespace Cccc
                 k.SetValue("SuperPasteKey", SuperPasteKey);
                 k.SetValue("SuperPasteModifiers", SuperPasteModifiers);
                 k.SetValue("SuperPasteOptions", SuperPasteOptions);
+                k.SetValue("SuperPasteShortcuts", SuperPasteShortcuts.ToArray(), RegistryValueKind.MultiString);
                 k.SetValue("NearPointerClickThrough", NearPointerClickThrough ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);

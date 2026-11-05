@@ -24,7 +24,21 @@ namespace Cccc
         static readonly Regex Cjk = new Regex(@"(?<=[\p{IsCJKUnifiedIdeographs}])[ \u3000]+(?=[A-Za-z0-9])|(?<=[A-Za-z0-9])[ \u3000]+(?=[\p{IsCJKUnifiedIdeographs}])");
         static bool IsStructure(string s)
         {
-            return Regex.IsMatch(s, @"^( {0,3}(>|#{1,6}(\s|$)|([-+*]|\d+[.)])\s|\[[^\]]+\]:)| {4}|\t|\s*[-*_][\s*_-]{2,}\s*$|\s*[=-]+\s*$)") || s.Contains("|");
+            return Regex.IsMatch(s, @"^( {0,3}(>|#{1,6}(\s|$)|([-+*]|\d+[.)])\s|\[[^\]]+\]:)| {4}|\t)") || s.Contains("|") || IsDivider(s);
+        }
+        static bool IsDivider(string s)
+        {
+            // A linear scan avoids backtracking on very long near-matching divider lines.
+            string t = s.Trim();
+            if (t.Length == 0) return false;
+            bool setext = true, thematic = t.Length >= 3 && (t[0] == '-' || t[0] == '*' || t[0] == '_');
+            foreach (char c in t)
+            {
+                setext &= c == '=' || c == '-';
+                thematic &= c == '-' || c == '*' || c == '_' || char.IsWhiteSpace(c);
+                if (!setext && !thematic) return false;
+            }
+            return setext || thematic;
         }
         public static PasteResult Clean(string text, PasteRules rules)
         {
@@ -42,10 +56,19 @@ namespace Cccc
             }
             if (rules.Markdown)
             {
-                char fence = '\0'; int fenceSize = 0, inlineTicks = 0; bool html = false, list = false;
+                char fence = '\0'; int fenceSize = 0, inlineTicks = 0, linkBrackets = 0, linkParens = 0;
+                bool linkTarget = false;
+                string htmlEnd = null;
+                bool html = false, list = false, afterBlank = false;
                 for (int i = 0; i < lines.Count; i++)
                 {
                     var line = lines[i]; string s = line.Text;
+                    if (htmlEnd != null)
+                    {
+                        line.Protected = true;
+                        if (s.IndexOf(htmlEnd, StringComparison.OrdinalIgnoreCase) >= 0) htmlEnd = null;
+                        continue;
+                    }
                     Match f = Regex.Match(s, @"^ {0,3}(`{3,}|~{3,})");
                     if (fence != '\0')
                     {
@@ -54,6 +77,23 @@ namespace Cccc
                         continue;
                     }
                     if (f.Success) { fence = f.Groups[1].Value[0]; fenceSize = f.Groups[1].Length; line.Protected = true; continue; }
+                    // HTML regions with explicit terminators can contain blank lines.
+                    string trimmed = s.TrimStart();
+                    if (trimmed.StartsWith("<!--")) htmlEnd = "-->";
+                    else if (trimmed.StartsWith("<?")) htmlEnd = "?>";
+                    else if (trimmed.StartsWith("<![CDATA[")) htmlEnd = "]]>";
+                    else if (i == 0 && s == "---") htmlEnd = "---";
+                    else
+                    {
+                        Match tag = Regex.Match(trimmed, @"^<(pre|script|style|textarea)(?:\s|>|$)", RegexOptions.IgnoreCase);
+                        if (tag.Success) htmlEnd = "</" + tag.Groups[1].Value + ">";
+                    }
+                    if (htmlEnd != null)
+                    {
+                        line.Protected = true;
+                        if (!(i == 0 && s == "---") && s.IndexOf(htmlEnd, StringComparison.OrdinalIgnoreCase) >= 0) htmlEnd = null;
+                        continue;
+                    }
                     bool inlineCode = inlineTicks > 0 || s.Contains("`");
                     foreach (Match run in Regex.Matches(s, "`+"))
                     {
@@ -61,11 +101,25 @@ namespace Cccc
                         else if (inlineTicks == run.Length) inlineTicks = 0;
                     }
                     if (inlineCode) { line.Protected = true; continue; }
-                    // Conservative HTML/list blocks include lazy continuation and their terminating blank line.
-                    if (Regex.IsMatch(s, @"^\s*<[/!A-Za-z?]") || (i == 0 && s == "---")) html = true;
-                    if (Regex.IsMatch(s, @"^ {0,3}([-+*]|\d+[.)])\s")) list = true;
+                    if (ProtectLink(s, ref linkBrackets, ref linkParens, ref linkTarget)) { line.Protected = true; continue; }
+                    if (Regex.IsMatch(s, @"^\s*<[/!A-Za-z?]")) html = true;
+                    bool marker = Regex.IsMatch(s, @"^ {0,3}(>|([-+*]|\d+[.)])\s|\[[^\]]+\]:)");
+                    // Keep list/quote continuations after blank lines when still indented.
+                    if (afterBlank && s.Trim().Length > 0 && !marker && s[0] != ' ' && s[0] != '\t') list = false;
+                    if (marker) list = true;
                     if (html || list || IsStructure(s)) line.Protected = true;
-                    if (s.Trim().Length == 0) { html = false; list = false; }
+                    afterBlank = s.Trim().Length == 0;
+                    if (afterBlank) html = false;
+                }
+                // Blank lines inside indented code are part of that protected block.
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    if (!(lines[i].Text.StartsWith("    ") || lines[i].Text.StartsWith("\t"))) continue;
+                    int j = i + 1;
+                    while (j < lines.Count && lines[j].Text.Trim().Length == 0) j++;
+                    if (j < lines.Count && (lines[j].Text.StartsWith("    ") || lines[j].Text.StartsWith("\t")))
+                        for (int n = i + 1; n < j; n++) lines[n].Protected = true;
+                    i = j - 1;
                 }
                 // A single pipe-bearing row may be a table: protect adjacent table rows above as well.
                 for (int i = 1; i < lines.Count; i++)
@@ -87,19 +141,23 @@ namespace Cccc
             }
             if (rules.Newlines || (!rules.Markdown && rules.BlankLines))
             {
+                // Build a new list instead of repeatedly shifting the remaining lines.
+                var normalized = new List<Line>();
                 for (int i = 0; i < lines.Count; i++)
                 {
-                    if (lines[i].Protected || lines[i].End.Length == 0) continue;
+                    var line = lines[i]; normalized.Add(line);
+                    if (line.Protected || line.End.Length == 0) continue;
                     int j = i + 1;
                     while (j < lines.Count && !lines[j].Protected && lines[j].Text.Length == 0 && lines[j].End.Length > 0) j++;
                     int keep = rules.Markdown || rules.BlankLines ? 1 : 0;
                     int blankCount = j - i - 1;
-                    if (blankCount > keep)
-                    { lines.RemoveRange(i + 1 + keep, blankCount - keep); result.Changes++; }
-                    if (!rules.Markdown && rules.BlankLines && blankCount == 0 && i + 1 < lines.Count && !lines[i+1].Protected)
-                    { lines.Insert(i + 1, new Line { Text = "", End = dominant }); result.Changes++; i++; }
-                    else i += Math.Min(keep, blankCount);
+                    for (int n = 0; n < Math.Min(keep, blankCount); n++) normalized.Add(lines[i + 1 + n]);
+                    if (blankCount > keep) result.Changes++;
+                    if (!rules.Markdown && rules.BlankLines && blankCount == 0 && j < lines.Count && !lines[j].Protected)
+                    { normalized.Add(new Line { Text = "", End = dominant }); result.Changes++; }
+                    i = j - 1;
                 }
+                lines = normalized;
             }
             if (rules.EndNewlines)
             {
@@ -111,6 +169,26 @@ namespace Cccc
             }
             var output = new StringBuilder(); foreach (var line in lines) output.Append(line.Text).Append(line.End);
             result.Text = output.ToString(); return result;
+        }
+        static bool ProtectLink(string s, ref int brackets, ref int parens, ref bool target)
+        {
+            bool continued = brackets > 0 || parens > 0 || target;
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '\\') { i++; continue; }
+                if (parens > 0) { if (c == '(') parens++; else if (c == ')') parens--; continue; }
+                if (target)
+                {
+                    if (char.IsWhiteSpace(c)) continue;
+                    target = false;
+                    if (c == '(') { parens = 1; continue; }
+                }
+                if (c == '[') brackets++;
+                else if (c == ']' && brackets > 0) { brackets--; if (brackets == 0) target = true; }
+            }
+            // An unmatched label/destination is preserved to EOF rather than guessed.
+            return continued || brackets > 0 || parens > 0;
         }
         static int CountTabs(string s) { int count = 0; foreach (char c in s) if (c == '\t') count++; return count; }
         static string CleanMarkdownLine(string s, PasteRules rules)
