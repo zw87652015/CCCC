@@ -82,3 +82,39 @@ Build Windows with `./build.ps1` and macOS with `bash mac/build.sh`.
 ## 许可证
 
 [MIT](LICENSE)
+
+
+## Windows 超级粘贴 / Super Paste
+
+在 **设置… → 超级粘贴** 启用（默认关闭），设置快捷键、文本模式和九项独立清理规则。
+默认快捷键为 `Ctrl+Shift+Alt+V` 和 `Shift+Windows+Insert`，两者执行相同的清理和粘贴。设置中可添加、修改或删除多个快捷键（至少保留一个）。JetBrains 已使用 Ctrl+Shift+Alt+V 粘贴纯文本，启用前请留意应用内部冲突。
+录入快捷键可直接按组合键，也可先点“添加快捷键”，勾选修饰键（如 Shift、Windows）、选择主键（如 Insert），再点“保存快捷键”。重复项会显示提示。
+快捷键整组注册；修改失败时保留原先可用的整组快捷键，并显示冲突项。旧配置保留原快捷键并补充 `Shift+Windows+Insert`；快捷键列表支持 JSON 导入／导出。
+注册失败会显示错误，修改失败时保留已工作的旧快捷键。普通 `Ctrl+V` 不允许设置为超级粘贴快捷键。
+
+超级粘贴会把完整 Unicode 文本按规则处理后，以纯文本粘贴，并将清理结果保留在剪贴板。
+**不恢复原格式，不保留历史内容。** 只读取 Unicode 文本；即使来源同时提供富文本或图片预览，也只取文本。纯图片、文件列表、带隐私标记的内容和空处理结果不写入。
+文本输入上限约为 100 万 UTF-16 字符。等待组合键松开期间，若焦点或剪贴板变化则取消；
+输入发送失败时，结果仍在剪贴板，可以手动粘贴。程序不会把发送按键等同于目标应用已成功插入。
+
+- 默认 Markdown 模式，仅勾选“清理异常项目符号”和“删除文末换行”。普通文本模式可进一步清理空格和换行。
+- 九项规则：六种异常私用区项目符号、Tab 展开、行首空格、行尾空格、中英文之间空格、重复空格、重复换行、补空行、文末换行。
+- 仅删除 `U+F06C/F06E/F075/F0FC/F0D8/F0B2`，保留 `■ ● •`、带圈数字、其他私用区字符和 `U+000B`。
+- Markdown 保守保护代码、列表、引用、表格、链接、HTML 和不确定语法；包含行内代码的整行也会保留。因此可能少清理，不会重新格式化全文。Markdown 模式禁用补空行，保留硬换行所需空格。
+- 连续两行以上、每行 Tab 数量相同且至少一个 Tab 的区域按表格整块保留，两种模式均如此。
+- 普通模式同时勾选换行去重与补空行时，先去重再补到一个空白行；Markdown 去重仅压缩多余空白行。
+- Tab 按四字符制表位展开；已有换行风格保留。设置页的输入／结果预览不读取实际剪贴板。
+- 设置自动保存并进入 JSON 导入／导出；暂停时释放快捷键，恢复后重新注册。编辑快捷键期间也暂时释放注册，避免误触粘贴。
+
+先退出正在运行的 CCCC，再运行 `./test-super-paste.ps1` 执行引擎、事务、注册冲突、设置与界面检查。
+测试使用独立注册表路径；真实 SendInput 接收测试使用内存测试数据和拦截 WM_PASTE 的自建窗口，
+不读取或覆盖用户剪贴板。构建仍使用 `./build.ps1`。
+
+Windows only. Super Paste is off by default; configure it in **Settings → Super Paste**.
+Default shortcuts: `Ctrl+Shift+Alt+V` and `Shift+Windows+Insert`. Both run the same cleanup and paste action. Add, edit or remove shortcuts in settings (keep at least one). JetBrains uses Ctrl+Shift+Alt+V for plain-text paste. Plain `Ctrl+V` is reserved.
+To enter a shortcut, press the chord or click Add shortcut, select modifiers and the main key, then click Save shortcut. Existing duplicates are identified instead of silently ignored.
+Shortcut changes are applied as a set; conflicts retain the previous working set and identify the unavailable shortcut. Legacy settings keep their chosen shortcut and gain `Shift+Windows+Insert`. The list is included in JSON import/export.
+Processing reads Unicode text even when rich formats or bitmap previews are also available, pastes plain text, and keeps the cleaned result on the clipboard. Textless images, file lists and privacy-marked data are excluded; rich formats are not restored.
+Markdown mode conservatively protects structural regions; plain mode supports additional whitespace cleanup.
+Tab-separated tables are protected in both modes. Settings and examples are local; previews never read the clipboard.
+This feature is not implemented on macOS. See [Super Paste notes](docs/SUPER_PASTE.md) for validation limits.

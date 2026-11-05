@@ -19,6 +19,13 @@ namespace Cccc
         readonly AudioWatch audio = new AudioWatch();
         readonly Hub hub = new Hub();
         readonly KeyHook hook;
+        readonly PasteHotkey pasteHotkey;
+        string[] suspendedPasteShortcuts;
+        readonly SuperPaste superPaste;
+        bool pasteRegistrationFailed;
+        string pasteErrorSignature;
+        bool pasteCapturing;
+        uint pasteSequence;
         readonly NotifyIcon tray = new NotifyIcon();
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
@@ -46,6 +53,12 @@ namespace Cccc
         public App(bool silent, bool updated)
         {
             ui = new WindowsFormsSynchronizationContext();
+            pasteHotkey = new PasteHotkey();
+            var pasteClock = Stopwatch.StartNew();
+            int pasteTriggerKey = 0;
+            superPaste = new SuperPaste(new WindowsPasteDesktop(hub.Handle, () => pasteTriggerKey), () => pasteClock.Elapsed.TotalSeconds,
+                message => Notice(L.SuperPasteTitle, message), seq => { pasteSequence = seq; });
+            pasteHotkey.Pressed += key => { if (set.SuperPasteEnabled && !set.Paused && !superPaste.Busy) { pasteTriggerKey = key; superPaste.Begin(set.PasteRules()); } };
             L.Apply(set.Lang);
             sounds.Load(set.SoundOkFile, set.SoundFailFile);
             card.CreateWindow();
@@ -71,6 +84,7 @@ namespace Cccc
 
             hub.ClipboardChanged += delegate { debounce.Stop(); debounce.Start(); };
             hub.Key += OnKey;
+            hub.PasteSettings += ShowSuperPasteSettings;
             hub.Hello += delegate { Notice(L.RunningTitle, L.RunningSub); };
             debounce.Tick += delegate { debounce.Stop(); OnClipboard(); };
             failCheck.Tick += delegate { failCheck.Stop(); OnFailCheck(); };
@@ -162,12 +176,29 @@ namespace Cccc
             sounds.Load(set.SoundOkFile, set.SoundFailFile);
         }
 
+        public void ShowSuperPasteSettings() { OpenCustomize(); customize.SelectPage(8); }
+
         void OpenCustomize()
         {
             if (customize == null)
             {
                 customize = new Customize(set, Changed, ShowSample, ShowCapsSample, ShowWifiSample, ShowAudioSample, TestSound, wifi);
-                customize.Closed += delegate { customize = null; };
+                customize.SuperPasteStatus = () => pasteRegistrationFailed ? PasteConflictStatus() : pasteHotkey.Active ? L.SPActive + ": " + pasteHotkey.ActiveText : L.SPInactive;
+                customize.SuperPasteCapture = value =>
+                {
+                    if (value && !pasteCapturing) suspendedPasteShortcuts = pasteHotkey.RegisteredShortcuts;
+                    pasteCapturing = value;
+                    if (value) { superPaste.Cancel(); pasteHotkey.Configure(false, 0, 0); }
+                    else
+                    {
+                        if (set.SuperPasteEnabled && !set.Paused && suspendedPasteShortcuts != null && suspendedPasteShortcuts.Length > 0)
+                            pasteHotkey.Configure(true, suspendedPasteShortcuts);
+                        suspendedPasteShortcuts = null;
+                        Sync();
+                    }
+                };
+                customize.Reload();
+                customize.Closed += delegate { customize.SuperPasteCapture(false); customize = null; };
             }
             customize.Show();
             customize.Activate();
@@ -295,9 +326,18 @@ namespace Cccc
             if (ok) sounds.Ok(); else sounds.No();
         }
 
+        string PasteConflictStatus() { return L.SPConflict + " " + pasteHotkey.FailedShortcut + (pasteHotkey.Active ? "\n" + L.SPActive + ": " + pasteHotkey.ActiveText : ""); }
+
         void Sync()
         {
             L.Apply(set.Lang);
+            bool pasteEnabled = set.SuperPasteEnabled && !set.Paused && !pasteCapturing;
+            if (!pasteEnabled) superPaste.Cancel();
+            pasteRegistrationFailed = !pasteHotkey.Configure(pasteEnabled, set.SuperPasteShortcuts);
+            string errorSignature = string.Join(";", set.SuperPasteShortcuts.ToArray());
+            if (pasteRegistrationFailed && pasteErrorSignature != errorSignature)
+            { pasteErrorSignature = errorSignature; Notice(L.SuperPasteTitle, PasteConflictStatus()); }
+            else if (!pasteRegistrationFailed) pasteErrorSignature = null;
             card.Apply(set);
             capsCard.Apply(set);
             wifiCard.Apply(set);
@@ -386,6 +426,11 @@ namespace Cccc
         {
             // Office raises WM_CLIPBOARDUPDATE on every paste without changing anything.
             uint seq = Native.GetClipboardSequenceNumber();
+            if (pasteSequence != 0)
+            {
+                bool own = seq == pasteSequence; pasteSequence = 0;
+                if (own) { lastSeq = seq; return; }
+            }
             if (seq == lastSeq) return;
             uint prevSeq = lastSeq;
             lastSeq = seq;
@@ -561,6 +606,8 @@ namespace Cccc
 
         void Quit()
         {
+            superPaste.Dispose();
+            pasteHotkey.Dispose();
             hook.Stop();
             sounds.StopAll();
             tray.Visible = false;
@@ -598,11 +645,12 @@ namespace Cccc
             {
                 if (!created)
                 {
-                    Native.PostMessage(Native.HWND_BROADCAST, Hub.HelloMsg, IntPtr.Zero, IntPtr.Zero);
+                    Native.PostMessage(Native.HWND_BROADCAST, verb == "--super-paste-settings" ? Hub.PasteSettingsMsg : Hub.HelloMsg, IntPtr.Zero, IntPtr.Zero);
                     return;
                 }
                 Updater.Cleanup(Application.ExecutablePath);
                 app = new App(Array.IndexOf(args, "--silent") >= 0, verb == "--updated");
+                if (verb == "--super-paste-settings") app.ShowSuperPasteSettings();
                 Application.Run();
                 GC.KeepAlive(mutex);
             }
