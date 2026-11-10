@@ -112,6 +112,11 @@ namespace Cccc
             showAudio = onShowAudio;
             this.wifiWatch = wifiWatch;
             test = onTest;
+            ConfirmSuperPaste = delegate
+            {
+                return MessageBox.Show(w, L.SPAdvancedWarn, L.SuperPasteTitle,
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+            };
 
             using (var s = typeof(Customize).Assembly.GetManifestResourceStream("Cccc.Customize.xaml"))
                 w = (Window)XamlReader.Load(s);
@@ -319,6 +324,7 @@ namespace Cccc
             w.Resources["HoverFill"] = Solid(dark ? "#15FFFFFF" : "#80F9F9F9");
             w.Resources["ThumbFill"] = Solid("#FFFFFF");
             w.Resources["ThumbStroke"] = Solid("#33000000");
+            w.Resources["DangerBrush"] = Solid(dark ? "#FF6B5E" : "#C42B1C");
             foreach (string size in new[] { "Text", "Display", "Small" })
                 w.Resources[size == "Text" ? "UiFont" : size + "Font"] = new FontFamily(L.Zh ? "Microsoft YaHei UI" : FirstInstalled("Segoe UI Variable " + size, "Segoe UI"));
             w.Resources["IconFont"] = new FontFamily(FirstInstalled("Segoe Fluent Icons", "Segoe MDL2 Assets"));
@@ -1433,6 +1439,11 @@ namespace Cccc
                 int n = key[4] - '0';
                 if (n >= 0 && n < 9) return pickMain.Spots[n];
             }
+            if (key != null && key.Length == 6 && key.StartsWith("spMod", StringComparison.Ordinal))
+            {
+                int n = key[5] - '0';
+                if (n >= 0 && n < 4 && spModifiers != null) return spModifiers[n];
+            }
             switch (key)
             {
                 case "pause": return chkPause;
@@ -1467,6 +1478,16 @@ namespace Cccc
                 case "audioStay": return chkAudioStay;
                 case "capsHeight": return sldCapsH;
                 case "capsSame": return pickCaps.ChipSame;
+                case "spPaste": return spEnabled;
+                case "spSymbols": return spSymbols;
+                case "spTrailing": return spTrailing;
+                case "spBlankLines": return spBlankLines;
+                case "spEndNewlines": return spEndNewlines;
+                case "spKey": return spMainKey;
+                case "spSettings": return spSettings;
+                case "spStatus": return spStatus;
+                case "spSample": return spSample;
+                case "spResult": return spResult;
             }
             return null;
         }

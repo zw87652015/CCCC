@@ -290,8 +290,6 @@ namespace Cccc
     sealed class Hub : NativeWindow
     {
         public static readonly int HelloMsg = Native.RegisterWindowMessage("CCCC.Hello");
-        public static readonly int PasteSettingsMsg = Native.RegisterWindowMessage("CCCC.PasteSettings");
-        public event Action PasteSettings;
 
         public event Action ClipboardChanged;
         public event Action<int, uint> Key;
@@ -313,7 +311,6 @@ namespace Cccc
         {
             if (m.Msg == Native.WM_CLIPBOARDUPDATE) { if (ClipboardChanged != null) ClipboardChanged(); return; }
             if (m.Msg == Native.WM_APP_KEY) { if (Key != null) Key((int)m.WParam, unchecked((uint)(int)m.LParam.ToInt64())); return; }
-            if (m.Msg == PasteSettingsMsg && PasteSettingsMsg != 0) { if (PasteSettings != null) PasteSettings(); return; }
             if (m.Msg == HelloMsg && HelloMsg != 0) { if (Hello != null) Hello(); return; }
             base.WndProc(ref m);
         }

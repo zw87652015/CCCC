@@ -63,7 +63,7 @@ namespace Cccc
                     return;
                 }
                 if (desktop.Sequence != sequence) { Fail(L.SPChanged); return; }
-                text = SuperPasteText.Clean(text, rules).Text;
+                text = SuperPasteText.Clean(text, rules);
                 if (string.IsNullOrWhiteSpace(text)) { Fail(L.SPEmpty); return; }
             }
             if (!desktop.KeysReleased) return;

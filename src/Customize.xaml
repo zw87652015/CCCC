@@ -21,6 +21,7 @@
     <SolidColorBrush x:Key="HoverFill" Color="#15FFFFFF"/>
     <SolidColorBrush x:Key="ThumbFill" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="ThumbStroke" Color="#33000000"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="#FF6B5E"/>
     <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
     <FontFamily x:Key="DisplayFont">Segoe UI</FontFamily>
     <FontFamily x:Key="SmallFont">Segoe UI</FontFamily>
