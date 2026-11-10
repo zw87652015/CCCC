@@ -15,6 +15,7 @@ Windows 与 macOS 原生应用，启动后驻留托盘／菜单栏。
 - 简易模式使用紧凑单行卡片；透明度可调为 0–75%。
 - 可配置提示音、来源信息、忽略应用，以及 Caps Lock、Wi-Fi 和声音输出变化提醒。
 - 支持 JSON 配置导入／导出，中英文界面及开机启动。
+- 高级：Windows 超级粘贴，清理文本后粘贴（默认关闭，见下文）。
 
 ## 使用
 
@@ -82,3 +83,27 @@ Build Windows with `./build.ps1` and macOS with `bash mac/build.sh`.
 ## 许可证
 
 [MIT](LICENSE)
+
+
+## Windows 超级粘贴 / Super Paste（高级）
+
+**高级功能，默认关闭。** 超级粘贴会主动改写剪贴板，并模拟一次 Ctrl+V；仅建议明确了解其作用的用户开启。仅 Windows 提供，macOS 没有此功能。
+
+在 **设置… → 超级粘贴** 开启（会先弹出警告确认），默认快捷键为 `Shift+Windows+Insert`，可在设置中更改；`Ctrl+V` 保留为普通粘贴，注册冲突时沿用原快捷键。
+
+四项清理规则，各自独立开关：
+
+- 清理异常项目符号（默认开）：仅删除六种私用区字符。
+- 删除行尾空格（默认关）。
+- 合并连续空行（默认关）。
+- 删除文末换行（默认开）。
+
+只处理纯文本：图片、文件列表和带隐私标记的内容不处理；不恢复原富文本格式，清理结果会保留在剪贴板。目标窗口以管理员权限运行时可能忽略模拟按键。设置页的示例预览不读取实际剪贴板。
+
+先退出正在运行的 CCCC，再运行 `./test-super-paste.ps1` 执行检查。
+
+---
+
+Windows only, off by default, and marked as an advanced feature: Super Paste actively rewrites the clipboard and simulates Ctrl+V, so enable it only if you know what it does. Turn it on under **Settings… → Super Paste** (a warning asks for confirmation). The default shortcut is `Shift+Windows+Insert`; `Ctrl+V` stays normal paste, and a registration conflict keeps the previous shortcut.
+
+Four independent cleaning rules: stray private-use bullet symbols (on), trailing spaces (off), blank-line runs (off), final newlines (on). Only plain text is processed — images, file lists and privacy-marked content are left alone, rich formatting is not restored, and the cleaned result stays on the clipboard. Elevated target windows may ignore the simulated keystroke.

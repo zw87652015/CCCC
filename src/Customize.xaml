@@ -21,6 +21,7 @@
     <SolidColorBrush x:Key="HoverFill" Color="#15FFFFFF"/>
     <SolidColorBrush x:Key="ThumbFill" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="ThumbStroke" Color="#33000000"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="#FF6B5E"/>
     <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
     <FontFamily x:Key="DisplayFont">Segoe UI</FontFamily>
     <FontFamily x:Key="SmallFont">Segoe UI</FontFamily>
@@ -630,6 +631,7 @@
         <RadioButton x:Name="navCaps" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
         <RadioButton x:Name="navWifi" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
         <RadioButton x:Name="navAudio" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
+        <RadioButton x:Name="navSuperPaste" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
         <RadioButton x:Name="navAbout" GroupName="nav" Style="{StaticResource Nav}" Margin="0,0,0,2"/>
       </StackPanel>
       <Button x:Name="btnReset" DockPanel.Dock="Bottom" Style="{StaticResource Link}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14,0,0,4"/>

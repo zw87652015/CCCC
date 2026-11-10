@@ -18,7 +18,7 @@ namespace Cccc
 {
     // Windows 11 style settings window (WPF). Every control writes straight into the settings and calls `changed`;
     // `loading` blocks those writes while Reload pushes values back.
-    sealed class Customize
+    sealed partial class Customize
     {
         sealed class Colour
         {
@@ -69,8 +69,8 @@ namespace Cccc
         readonly Card card = new Card();
         readonly Window w;
         readonly DispatcherTimer armTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        readonly RadioButton[] navs = new RadioButton[9];
-        readonly StackPanel[] pages = new StackPanel[9];
+        readonly RadioButton[] navs = new RadioButton[10];
+        readonly StackPanel[] pages = new StackPanel[10];
         readonly TextBlock txtTitle;
         readonly Button btnReset;
         readonly StackPanel pageHost;
@@ -112,6 +112,11 @@ namespace Cccc
             showAudio = onShowAudio;
             this.wifiWatch = wifiWatch;
             test = onTest;
+            ConfirmSuperPaste = delegate
+            {
+                return MessageBox.Show(w, L.SPAdvancedWarn, L.SuperPasteTitle,
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+            };
 
             using (var s = typeof(Customize).Assembly.GetManifestResourceStream("Cccc.Customize.xaml"))
                 w = (Window)XamlReader.Load(s);
@@ -172,6 +177,7 @@ namespace Cccc
             bool turnedOn = set.FullPalette && !lastFull;
             lastFull = set.FullPalette;
             if (turnedOn) expanded = true;
+            ReloadSuperPaste();
             chkPause.IsChecked = set.Paused;
             chkWarn.IsChecked = set.FailHint;
             chkCaps.IsChecked = set.CapsHint;
@@ -318,6 +324,7 @@ namespace Cccc
             w.Resources["HoverFill"] = Solid(dark ? "#15FFFFFF" : "#80F9F9F9");
             w.Resources["ThumbFill"] = Solid("#FFFFFF");
             w.Resources["ThumbStroke"] = Solid("#33000000");
+            w.Resources["DangerBrush"] = Solid(dark ? "#FF6B5E" : "#C42B1C");
             foreach (string size in new[] { "Text", "Display", "Small" })
                 w.Resources[size == "Text" ? "UiFont" : size + "Font"] = new FontFamily(L.Zh ? "Microsoft YaHei UI" : FirstInstalled("Segoe UI Variable " + size, "Segoe UI"));
             w.Resources["IconFont"] = new FontFamily(FirstInstalled("Segoe Fluent Icons", "Segoe MDL2 Assets"));
@@ -360,9 +367,9 @@ namespace Cccc
         {
             builtZh = L.Zh;
             w.Title = L.CustomizeTitle;
-            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAudio, L.TabAbout };
-            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE92E", "\uE701", "\uE7F5", "\uE946" };
-            for (int i = 0; i < 9; i++)
+            string[] labels = { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAudio, L.SuperPasteTitle, L.TabAbout };
+            string[] glyphs = { "\uE713", "\uE790", "\uE7F4", "\uE767", "\uE71B", "\uE92E", "\uE701", "\uE7F5", "\uE77F", "\uE946" };
+            for (int i = 0; i < 10; i++)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
                 var icon = Glyph(glyphs[i], 20);
@@ -377,7 +384,7 @@ namespace Cccc
 
         string PageTitle(int index)
         {
-            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAudio, L.TabAbout }[index];
+            return new[] { L.TabGeneral, L.TabAppearance, L.TabBehavior, L.TabSound, L.TabSource, L.TabCaps, L.TabWifi, L.TabAudio, L.SuperPasteTitle, L.TabAbout }[index];
         }
 
         void ShowPage(int index)
@@ -396,8 +403,8 @@ namespace Cccc
 
         void BuildNav()
         {
-            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource", "navCaps", "navWifi", "navAudio", "navAbout" };
-            for (int i = 0; i < 9; i++)
+            string[] names = { "navGeneral", "navAppearance", "navBehavior", "navSound", "navSource", "navCaps", "navWifi", "navAudio", "navSuperPaste", "navAbout" };
+            for (int i = 0; i < 10; i++)
             {
                 int index = i;
                 var nav = (RadioButton)w.FindName(names[i]);
@@ -546,7 +553,8 @@ namespace Cccc
             pages[5] = BuildCaps();
             pages[6] = BuildWifi();
             pages[7] = BuildAudio();
-            pages[8] = BuildAbout();
+            pages[8] = BuildSuperPaste();
+            pages[9] = BuildAbout();
             foreach (StackPanel p in pages) pageHost.Children.Add(p);
         }
 
@@ -1431,6 +1439,11 @@ namespace Cccc
                 int n = key[4] - '0';
                 if (n >= 0 && n < 9) return pickMain.Spots[n];
             }
+            if (key != null && key.Length == 6 && key.StartsWith("spMod", StringComparison.Ordinal))
+            {
+                int n = key[5] - '0';
+                if (n >= 0 && n < 4 && spModifiers != null) return spModifiers[n];
+            }
             switch (key)
             {
                 case "pause": return chkPause;
@@ -1465,6 +1478,16 @@ namespace Cccc
                 case "audioStay": return chkAudioStay;
                 case "capsHeight": return sldCapsH;
                 case "capsSame": return pickCaps.ChipSame;
+                case "spPaste": return spEnabled;
+                case "spSymbols": return spSymbols;
+                case "spTrailing": return spTrailing;
+                case "spBlankLines": return spBlankLines;
+                case "spEndNewlines": return spEndNewlines;
+                case "spKey": return spMainKey;
+                case "spSettings": return spSettings;
+                case "spStatus": return spStatus;
+                case "spSample": return spSample;
+                case "spResult": return spResult;
             }
             return null;
         }

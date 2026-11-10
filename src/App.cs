@@ -19,6 +19,11 @@ namespace Cccc
         readonly AudioWatch audio = new AudioWatch();
         readonly Hub hub = new Hub();
         readonly KeyHook hook;
+        readonly PasteHotkey pasteHotkey;
+        readonly SuperPaste superPaste;
+        bool pasteRegistrationFailed;
+        string pasteErrorSignature;
+        uint pasteSequence;
         readonly NotifyIcon tray = new NotifyIcon();
         readonly Timer debounce = new Timer { Interval = 60 };
         readonly Timer failCheck = new Timer { Interval = 450 };
@@ -46,6 +51,12 @@ namespace Cccc
         public App(bool silent, bool updated)
         {
             ui = new WindowsFormsSynchronizationContext();
+            pasteHotkey = new PasteHotkey();
+            var pasteClock = Stopwatch.StartNew();
+            int pasteTriggerKey = 0;
+            superPaste = new SuperPaste(new WindowsPasteDesktop(hub.Handle, () => pasteTriggerKey), () => pasteClock.Elapsed.TotalSeconds,
+                message => Notice(L.SuperPasteTitle, message), seq => { pasteSequence = seq; });
+            pasteHotkey.Pressed += key => { if (set.SuperPasteEnabled && !set.Paused && !superPaste.Busy) { pasteTriggerKey = key; superPaste.Begin(set.PasteRules()); } };
             L.Apply(set.Lang);
             sounds.Load(set.SoundOkFile, set.SoundFailFile);
             card.CreateWindow();
@@ -167,6 +178,8 @@ namespace Cccc
             if (customize == null)
             {
                 customize = new Customize(set, Changed, ShowSample, ShowCapsSample, ShowWifiSample, ShowAudioSample, TestSound, wifi);
+                customize.SuperPasteStatus = () => pasteRegistrationFailed ? PasteConflictStatus() : pasteHotkey.Active ? L.SPActive + ": " + pasteHotkey.ActiveText : L.SPInactive;
+                customize.Reload();
                 customize.Closed += delegate { customize = null; };
             }
             customize.Show();
@@ -295,9 +308,25 @@ namespace Cccc
             if (ok) sounds.Ok(); else sounds.No();
         }
 
+        string PasteConflictStatus() { return L.SPConflict + " " + pasteHotkey.FailedShortcut + (pasteHotkey.Active ? "\n" + L.SPActive + ": " + pasteHotkey.ActiveText : ""); }
+
         void Sync()
         {
             L.Apply(set.Lang);
+            bool pasteEnabled = set.SuperPasteEnabled && !set.Paused;
+            if (!pasteEnabled) superPaste.Cancel();
+            string attemptedShortcut = set.SuperPasteShortcut;
+            pasteRegistrationFailed = !pasteHotkey.Configure(pasteEnabled, attemptedShortcut);
+            if (pasteRegistrationFailed && pasteErrorSignature != attemptedShortcut)
+            { pasteErrorSignature = attemptedShortcut; Notice(L.SuperPasteTitle, PasteConflictStatus()); }
+            else if (!pasteRegistrationFailed) pasteErrorSignature = null;
+            if (pasteRegistrationFailed)
+            {
+                // A chord that failed to register is not kept; the working binding (or the default) stays.
+                set.SuperPasteShortcut = pasteHotkey.ActiveShortcut ?? "12:45";
+                set.Save();
+                if (customize != null) customize.Reload();
+            }
             card.Apply(set);
             capsCard.Apply(set);
             wifiCard.Apply(set);
@@ -386,6 +415,11 @@ namespace Cccc
         {
             // Office raises WM_CLIPBOARDUPDATE on every paste without changing anything.
             uint seq = Native.GetClipboardSequenceNumber();
+            if (pasteSequence != 0)
+            {
+                bool own = seq == pasteSequence; pasteSequence = 0;
+                if (own) { lastSeq = seq; return; }
+            }
             if (seq == lastSeq) return;
             uint prevSeq = lastSeq;
             lastSeq = seq;
@@ -561,6 +595,8 @@ namespace Cccc
 
         void Quit()
         {
+            superPaste.Dispose();
+            pasteHotkey.Dispose();
             hook.Stop();
             sounds.StopAll();
             tray.Visible = false;

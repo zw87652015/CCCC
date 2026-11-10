@@ -27,6 +27,14 @@ namespace Cccc
         public int FreeX = 500, FreeY = 900, Transparency;
         public int CapsPosition = -1, CapsFreeX = 500, CapsFreeY = 900, CapsWidth = 200, CapsHeight = 40, CapsDurationMs = 2600;
         public bool NearPointerClickThrough;
+        public bool SuperPasteEnabled;
+        public string SuperPasteShortcut = "12:45";
+        public bool SuperPasteSymbols = true, SuperPasteTrailing, SuperPasteBlankLines, SuperPasteEndNewlines = true;
+        public PasteRules PasteRules()
+        {
+            return new PasteRules { Symbols = SuperPasteSymbols, Trailing = SuperPasteTrailing,
+                BlankLines = SuperPasteBlankLines, EndNewlines = SuperPasteEndNewlines };
+        }
         public string Lang = "auto";
         public string OkColor, WarnColor, BgColor, BorderColor, TitleColor, SubColor, MetaColor;
         public string FontFamily, SoundOkFile, SoundFailFile;
@@ -47,6 +55,15 @@ namespace Cccc
             {
                 if (k == null) return s;
                 s.Paused = Flag(k, "Paused", s.Paused);
+                s.SuperPasteEnabled = Flag(k, "SuperPasteEnabled", false);
+                string shortcut = Str(k, "SuperPasteShortcut");
+                int unusedMods, unusedKey;
+                s.SuperPasteShortcut = shortcut != null && PasteHotkey.Parse(shortcut, out unusedMods, out unusedKey)
+                    ? unusedMods + ":" + unusedKey : "12:45";
+                s.SuperPasteSymbols = Flag(k, "SuperPasteSymbols", s.SuperPasteSymbols);
+                s.SuperPasteTrailing = Flag(k, "SuperPasteTrailing", s.SuperPasteTrailing);
+                s.SuperPasteBlankLines = Flag(k, "SuperPasteBlankLines", s.SuperPasteBlankLines);
+                s.SuperPasteEndNewlines = Flag(k, "SuperPasteEndNewlines", s.SuperPasteEndNewlines);
                 s.NearPointerClickThrough = Flag(k, "NearPointerClickThrough", s.NearPointerClickThrough);
                 s.Sound = Flag(k, "Sound", s.Sound);
                 s.FailHint = Flag(k, "FailHint", s.FailHint);
@@ -108,6 +125,17 @@ namespace Cccc
             using (var k = Registry.CurrentUser.CreateSubKey(Key))
             {
                 k.SetValue("Paused", Paused ? 1 : 0, RegistryValueKind.DWord);
+                k.SetValue("SuperPasteEnabled", SuperPasteEnabled ? 1 : 0);
+                k.SetValue("SuperPasteShortcut", SuperPasteShortcut ?? "12:45", RegistryValueKind.String);
+                k.SetValue("SuperPasteSymbols", SuperPasteSymbols ? 1 : 0);
+                k.SetValue("SuperPasteTrailing", SuperPasteTrailing ? 1 : 0);
+                k.SetValue("SuperPasteBlankLines", SuperPasteBlankLines ? 1 : 0);
+                k.SetValue("SuperPasteEndNewlines", SuperPasteEndNewlines ? 1 : 0);
+                k.DeleteValue("SuperPasteMarkdown", false);
+                k.DeleteValue("SuperPasteKey", false);
+                k.DeleteValue("SuperPasteModifiers", false);
+                k.DeleteValue("SuperPasteOptions", false);
+                k.DeleteValue("SuperPasteShortcuts", false);
                 k.SetValue("NearPointerClickThrough", NearPointerClickThrough ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("Sound", Sound ? 1 : 0, RegistryValueKind.DWord);
                 k.SetValue("FailHint", FailHint ? 1 : 0, RegistryValueKind.DWord);
